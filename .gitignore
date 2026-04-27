@@ -1,0 +1,8 @@
+# Ignore build artefacts and dependencies
+backend/s3c-backend
+
+frontend/node_modules/
+frontend/dist/
+
+# Local environment overrides (never commit secrets)
+.env

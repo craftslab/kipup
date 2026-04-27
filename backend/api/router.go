@@ -1,0 +1,38 @@
+package api
+
+import (
+	"github.com/craftslab/s3c/backend/storage"
+	cors "github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+)
+
+// NewRouter constructs the gin engine with all routes registered.
+func NewRouter(client *storage.Client) *gin.Engine {
+	r := gin.Default()
+
+	r.Use(cors.New(cors.Config{
+		AllowAllOrigins:  true,
+		AllowMethods:     []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Disposition", "Content-Length"},
+		AllowCredentials: false,
+	}))
+
+	h := &Handler{client: client}
+
+	v1 := r.Group("/api/v1")
+	{
+		// Bucket operations
+		v1.GET("/buckets", h.ListBuckets)
+		v1.POST("/buckets", h.CreateBucket)
+		v1.DELETE("/buckets/:bucket", h.DeleteBucket)
+
+		// Object operations
+		v1.GET("/objects/:bucket", h.ListObjects)
+		v1.GET("/objects/:bucket/*key", h.DownloadObject)
+		v1.POST("/objects/:bucket", h.UploadObject)
+		v1.DELETE("/objects/:bucket/*key", h.DeleteObject)
+	}
+
+	return r
+}
