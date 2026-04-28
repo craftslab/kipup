@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -200,4 +201,65 @@ func (h *Handler) DeleteObject(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+}
+
+// parseExpiry reads the "expiry" query parameter (in seconds) and returns a
+// time.Duration.  When the parameter is absent or invalid the default of 24 h
+// is used.  The maximum accepted value is 7 days (604 800 s).
+func parseExpiry(c *gin.Context) time.Duration {
+	const defaultExpiry = 24 * time.Hour
+	const maxExpiry = 7 * 24 * time.Hour
+
+	s := c.Query("expiry")
+	if s == "" {
+		return defaultExpiry
+	}
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || v <= 0 {
+		return defaultExpiry
+	}
+	d := time.Duration(v) * time.Second
+	if d > maxExpiry {
+		d = maxExpiry
+	}
+	return d
+}
+
+// GenerateDownloadLink returns a presigned GET URL for a specific object.
+// Query param: expiry (seconds, default 86400, max 604800).
+func (h *Handler) GenerateDownloadLink(c *gin.Context) {
+	bucket := c.Param("bucket")
+	key := strings.TrimPrefix(c.Param("key"), "/")
+
+	expiry := parseExpiry(c)
+	u, err := h.client.PresignedGetObject(c.Request.Context(), bucket, key, expiry)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"url":        u,
+		"expires_in": int64(expiry.Seconds()),
+	})
+}
+
+// GenerateUploadLink returns a presigned PUT URL for uploading to a specific key.
+// Query param: expiry (seconds, default 86400, max 604800).
+func (h *Handler) GenerateUploadLink(c *gin.Context) {
+	bucket := c.Param("bucket")
+	key := strings.TrimPrefix(c.Param("key"), "/")
+
+	expiry := parseExpiry(c)
+	u, err := h.client.PresignedPutObject(c.Request.Context(), bucket, key, expiry)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"url":        u,
+		"key":        key,
+		"expires_in": int64(expiry.Seconds()),
+	})
 }

@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"io"
+	"net/url"
+	"time"
 
 	"github.com/craftslab/s3c/backend/config"
 	"github.com/minio/minio-go/v7"
@@ -74,6 +76,26 @@ func (c *Client) PutObjectStream(ctx context.Context, bucket, key string, reader
 // RemoveObject deletes a single object.
 func (c *Client) RemoveObject(ctx context.Context, bucket, key string) error {
 	return c.mc.RemoveObject(ctx, bucket, key, minio.RemoveObjectOptions{})
+}
+
+// PresignedGetObject returns a presigned URL for downloading an object.
+// The URL expires after the given duration (max 7 days for most S3-compatible stores).
+func (c *Client) PresignedGetObject(ctx context.Context, bucket, key string, expiry time.Duration) (string, error) {
+	u, err := c.mc.PresignedGetObject(ctx, bucket, key, expiry, url.Values{})
+	if err != nil {
+		return "", err
+	}
+	return u.String(), nil
+}
+
+// PresignedPutObject returns a presigned URL for uploading an object.
+// The URL expires after the given duration (max 7 days for most S3-compatible stores).
+func (c *Client) PresignedPutObject(ctx context.Context, bucket, key string, expiry time.Duration) (string, error) {
+	u, err := c.mc.PresignedPutObject(ctx, bucket, key, expiry)
+	if err != nil {
+		return "", err
+	}
+	return u.String(), nil
 }
 
 // RemoveObjectsWithPrefix deletes all objects whose key starts with prefix.

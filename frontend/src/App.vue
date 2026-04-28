@@ -1,6 +1,9 @@
 <template>
   <el-config-provider>
-    <el-container class="app-layout">
+    <!-- Standalone pages (e.g. /upload) render without the app shell -->
+    <router-view v-if="isStandalone" />
+
+    <el-container v-else class="app-layout">
       <el-header class="app-header">
         <div class="logo">
           <el-icon :size="22"><Files /></el-icon>
@@ -13,6 +16,15 @@
     </el-container>
   </el-config-provider>
 </template>
+
+<script setup>
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import { Files } from '@element-plus/icons-vue'
+
+const route = useRoute()
+const isStandalone = computed(() => !!route.meta?.standalone)
+</script>
 
 <style>
 html,

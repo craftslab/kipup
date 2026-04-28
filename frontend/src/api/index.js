@@ -38,3 +38,21 @@ export const uploadObjects = (bucket, files, prefix = '', onProgress) => {
 
 export const deleteObject = (bucket, key) =>
   api.delete(`/objects/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`)
+
+/**
+ * Returns a presigned download URL for a specific object.
+ * expirySeconds defaults to 86400 (24 h).
+ */
+export const generateDownloadLink = (bucket, key, expirySeconds = 86400) =>
+  api.get(`/presign/download/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`, {
+    params: { expiry: expirySeconds }
+  })
+
+/**
+ * Returns a presigned upload URL for a specific key.
+ * expirySeconds defaults to 86400 (24 h).
+ */
+export const generateUploadLink = (bucket, key, expirySeconds = 86400) =>
+  api.get(`/presign/upload/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`, {
+    params: { expiry: expirySeconds }
+  })

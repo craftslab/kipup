@@ -56,6 +56,11 @@
             @click="showUploadDialog = true"
           >Upload</el-button>
           <el-button
+            v-if="currentBucket"
+            :icon="Share"
+            @click="openUploadLinkDialog"
+          >Upload Link</el-button>
+          <el-button
             v-if="currentBucket && !currentPrefix"
             type="danger"
             :icon="Delete"
@@ -102,7 +107,7 @@
         </el-table-column>
 
         <!-- Actions column -->
-        <el-table-column label="Actions" width="160" fixed="right">
+        <el-table-column label="Actions" width="240" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="!row.isDir"
@@ -111,6 +116,12 @@
               size="small"
               @click.stop="downloadFile(row)"
             >Download</el-button>
+            <el-button
+              v-if="!row.isDir"
+              :icon="Share"
+              size="small"
+              @click.stop="openDownloadLinkDialog(row)"
+            >Copy Link</el-button>
             <el-button
               type="danger"
               :icon="Delete"
@@ -177,6 +188,70 @@
         <el-button type="primary" @click="createBucket">Create</el-button>
       </template>
     </el-dialog>
+
+    <!-- ===== Download Link Dialog ===== -->
+    <el-dialog v-model="showDownloadLinkDialog" title="Generate Download Link" width="540px">
+      <el-form label-width="100px">
+        <el-form-item label="File">
+          <span class="link-meta">{{ downloadLinkTarget?.key }}</span>
+        </el-form-item>
+        <el-form-item label="Expires in">
+          <el-select v-model="downloadLinkExpiry" style="width:100%">
+            <el-option label="1 hour" :value="3600" />
+            <el-option label="6 hours" :value="21600" />
+            <el-option label="24 hours (default)" :value="86400" />
+            <el-option label="3 days" :value="259200" />
+            <el-option label="7 days" :value="604800" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <div v-if="downloadLinkUrl" class="generated-link">
+        <el-input v-model="downloadLinkUrl" readonly>
+          <template #append>
+            <el-button :icon="CopyDocument" @click="copyToClipboard(downloadLinkUrl)">Copy</el-button>
+          </template>
+        </el-input>
+      </div>
+      <template #footer>
+        <el-button @click="showDownloadLinkDialog = false">Close</el-button>
+        <el-button type="primary" :loading="generatingDownloadLink" @click="generateDownloadLinkAction">
+          Generate Link
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- ===== Upload Link Dialog ===== -->
+    <el-dialog v-model="showUploadLinkDialog" title="Generate Upload Link" width="540px" @closed="resetUploadLink">
+      <el-form label-width="100px">
+        <el-form-item label="Destination">
+          <el-input v-model="uploadLinkKey" placeholder="folder/filename.ext" />
+          <div class="field-hint">Full object key (path + filename) for the upload destination.</div>
+        </el-form-item>
+        <el-form-item label="Expires in">
+          <el-select v-model="uploadLinkExpiry" style="width:100%">
+            <el-option label="1 hour" :value="3600" />
+            <el-option label="6 hours" :value="21600" />
+            <el-option label="24 hours (default)" :value="86400" />
+            <el-option label="3 days" :value="259200" />
+            <el-option label="7 days" :value="604800" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <div v-if="uploadLinkUrl" class="generated-link">
+        <p class="link-label">Upload page link (share with the uploader):</p>
+        <el-input v-model="uploadPageUrl" readonly>
+          <template #append>
+            <el-button :icon="CopyDocument" @click="copyToClipboard(uploadPageUrl)">Copy</el-button>
+          </template>
+        </el-input>
+      </div>
+      <template #footer>
+        <el-button @click="showUploadLinkDialog = false">Close</el-button>
+        <el-button type="primary" :loading="generatingUploadLink" @click="generateUploadLinkAction">
+          Generate Link
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -184,7 +259,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, UploadFilled, Delete, Download, Folder, Document, Coin } from '@element-plus/icons-vue'
+import { Plus, UploadFilled, Delete, Download, Folder, Document, Coin, Share, CopyDocument } from '@element-plus/icons-vue'
 import {
   listBuckets,
   createBucket as apiCreateBucket,
@@ -192,7 +267,9 @@ import {
   listObjects,
   downloadUrl,
   uploadObjects,
-  deleteObject
+  deleteObject,
+  generateDownloadLink,
+  generateUploadLink
 } from '../api'
 
 // ---- routing ----
@@ -230,6 +307,21 @@ const fileInputRef = ref(null)
 // Create bucket state
 const showCreateDialog = ref(false)
 const newBucket = ref({ name: '', region: 'us-east-1' })
+
+// Download link state
+const showDownloadLinkDialog = ref(false)
+const downloadLinkTarget = ref(null)
+const downloadLinkExpiry = ref(86400)
+const downloadLinkUrl = ref('')
+const generatingDownloadLink = ref(false)
+
+// Upload link state
+const showUploadLinkDialog = ref(false)
+const uploadLinkKey = ref('')
+const uploadLinkExpiry = ref(86400)
+const uploadLinkUrl = ref('')
+const uploadPageUrl = ref('')
+const generatingUploadLink = ref(false)
 
 // ---- lifecycle ----
 onMounted(() => {
@@ -409,6 +501,70 @@ async function startUpload() {
     ElMessage.error('Upload failed: ' + (e.response?.data?.error || e.message))
   } finally {
     uploading.value = false
+  }
+}
+
+// ---- presign link helpers ----
+function openDownloadLinkDialog(row) {
+  downloadLinkTarget.value = row
+  downloadLinkExpiry.value = 86400
+  downloadLinkUrl.value = ''
+  showDownloadLinkDialog.value = true
+}
+
+async function generateDownloadLinkAction() {
+  if (!downloadLinkTarget.value) return
+  generatingDownloadLink.value = true
+  try {
+    const { data } = await generateDownloadLink(
+      currentBucket.value,
+      downloadLinkTarget.value.key,
+      downloadLinkExpiry.value
+    )
+    downloadLinkUrl.value = data.url
+  } catch (e) {
+    ElMessage.error('Failed to generate link: ' + (e.response?.data?.error || e.message))
+  } finally {
+    generatingDownloadLink.value = false
+  }
+}
+
+function openUploadLinkDialog() {
+  uploadLinkKey.value = currentPrefix.value
+  uploadLinkExpiry.value = 86400
+  uploadLinkUrl.value = ''
+  uploadPageUrl.value = ''
+  showUploadLinkDialog.value = true
+}
+
+async function generateUploadLinkAction() {
+  const key = uploadLinkKey.value.trim()
+  if (!key) return ElMessage.warning('Destination key is required')
+  generatingUploadLink.value = true
+  try {
+    const { data } = await generateUploadLink(currentBucket.value, key, uploadLinkExpiry.value)
+    uploadLinkUrl.value = data.url
+    const filename = key.split('/').pop()
+    const params = new URLSearchParams({ url: data.url, filename })
+    uploadPageUrl.value = `${window.location.origin}/upload?${params.toString()}`
+  } catch (e) {
+    ElMessage.error('Failed to generate link: ' + (e.response?.data?.error || e.message))
+  } finally {
+    generatingUploadLink.value = false
+  }
+}
+
+function resetUploadLink() {
+  uploadLinkUrl.value = ''
+  uploadPageUrl.value = ''
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('Copied to clipboard')
+  } catch {
+    ElMessage.error('Failed to copy')
   }
 }
 
@@ -607,5 +763,27 @@ function formatDate(ts) {
 
 .upload-progress {
   margin-top: 10px;
+}
+
+.generated-link {
+  margin-top: 16px;
+}
+
+.link-label {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.link-meta {
+  font-size: 13px;
+  color: #303133;
+  word-break: break-all;
+}
+
+.field-hint {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
 }
 </style>
