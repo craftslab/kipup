@@ -6,6 +6,7 @@ import "os"
 type Config struct {
 	ListenAddr  string
 	S3Endpoint  string
+	S3PublicURL string
 	S3AccessKey string
 	S3SecretKey string
 	S3UseSSL    bool
@@ -17,6 +18,9 @@ func Load() *Config {
 	return &Config{
 		ListenAddr:  getEnv("LISTEN_ADDR", ":8080"),
 		S3Endpoint:  getEnv("S3_ENDPOINT", "localhost:9000"),
+		// S3PublicURL is the externally reachable base URL used in returned presigned links.
+		// Example: https://s3.example.com
+		S3PublicURL: getEnv("S3_PUBLIC_URL", ""),
 		S3AccessKey: getEnv("S3_ACCESS_KEY", "minioadmin"),
 		S3SecretKey: getEnv("S3_SECRET_KEY", "minioadmin"),
 		S3UseSSL:    getEnv("S3_USE_SSL", "false") == "true",

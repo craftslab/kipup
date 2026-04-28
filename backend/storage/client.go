@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/craftslab/s3c/backend/config"
@@ -13,7 +14,9 @@ import (
 
 // Client wraps the MinIO client and exposes S3 operations.
 type Client struct {
-	mc *minio.Client
+	mc          *minio.Client
+	publicBase  *url.URL
+	publicReady bool
 }
 
 // NewClient creates a new S3/MinIO client from configuration.
@@ -26,7 +29,39 @@ func NewClient(cfg *config.Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{mc: mc}, nil
+
+	var base *url.URL
+	ready := false
+	if raw := strings.TrimSpace(cfg.S3PublicURL); raw != "" {
+		// Accept host:port too.
+		if !strings.Contains(raw, "://") {
+			if cfg.S3UseSSL {
+				raw = "https://" + raw
+			} else {
+				raw = "http://" + raw
+			}
+		}
+		if u, perr := url.Parse(raw); perr == nil && u.Host != "" && (u.Scheme == "http" || u.Scheme == "https") {
+			base = u
+			ready = true
+		}
+	}
+
+	return &Client{mc: mc, publicBase: base, publicReady: ready}, nil
+}
+
+func (c *Client) rewritePresigned(raw string) string {
+	if !c.publicReady || raw == "" {
+		return raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	u.Scheme = c.publicBase.Scheme
+	u.Host = c.publicBase.Host
+	// Keep original path and query intact (signature is in query, not host).
+	return u.String()
 }
 
 // ListBuckets returns metadata for all buckets.
@@ -85,7 +120,7 @@ func (c *Client) PresignedGetObject(ctx context.Context, bucket, key string, exp
 	if err != nil {
 		return "", err
 	}
-	return u.String(), nil
+	return c.rewritePresigned(u.String()), nil
 }
 
 // PresignedPutObject returns a presigned URL for uploading an object.
@@ -95,7 +130,7 @@ func (c *Client) PresignedPutObject(ctx context.Context, bucket, key string, exp
 	if err != nil {
 		return "", err
 	}
-	return u.String(), nil
+	return c.rewritePresigned(u.String()), nil
 }
 
 // RemoveObjectsWithPrefix deletes all objects whose key starts with prefix.
