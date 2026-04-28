@@ -19,6 +19,7 @@ import (
 type Handler struct {
 	client *storage.Client
 	publicBaseURL string
+	allowedS3Hosts map[string]struct{}
 }
 
 // ----- bucket handlers -----
@@ -305,7 +306,7 @@ func (h *Handler) GenerateUploadLink(c *gin.Context) {
 
 // ----- streaming proxy handlers (for shared links) -----
 
-func parseRemoteURL(raw string) (*url.URL, error) {
+func (h *Handler) parseRemoteURL(raw string) (*url.URL, error) {
 	if raw == "" {
 		return nil, fmt.Errorf("missing url")
 	}
@@ -318,6 +319,13 @@ func parseRemoteURL(raw string) (*url.URL, error) {
 	}
 	if u.Host == "" {
 		return nil, fmt.Errorf("invalid url host")
+	}
+	// Prevent SSRF and accidental downloads of the SPA page:
+	// only allow presigned URLs pointing to our configured S3 endpoint host.
+	if len(h.allowedS3Hosts) > 0 {
+		if _, ok := h.allowedS3Hosts[u.Host]; !ok {
+			return nil, fmt.Errorf("invalid url host: %s", u.Host)
+		}
 	}
 	return u, nil
 }
@@ -332,7 +340,7 @@ func (h *Handler) ProxyUpload(c *gin.Context) {
 	}()
 
 	remoteRaw := c.Query("url")
-	remote, err := parseRemoteURL(remoteRaw)
+	remote, err := h.parseRemoteURL(remoteRaw)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -430,7 +438,7 @@ func (h *Handler) ProxyUpload(c *gin.Context) {
 // Data flows remote URL → this server → client without full buffering.
 func (h *Handler) ProxyDownload(c *gin.Context) {
 	remoteRaw := c.Query("url")
-	remote, err := parseRemoteURL(remoteRaw)
+	remote, err := h.parseRemoteURL(remoteRaw)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

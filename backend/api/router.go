@@ -5,6 +5,8 @@ import (
 	"github.com/craftslab/s3c/backend/storage"
 	cors "github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"net/url"
+	"strings"
 )
 
 // NewRouter constructs the gin engine with all routes registered.
@@ -19,7 +21,24 @@ func NewRouter(client *storage.Client, cfg *config.Config) *gin.Engine {
 		AllowCredentials: false,
 	}))
 
-	h := &Handler{client: client, publicBaseURL: cfg.PublicBaseURL}
+	h := &Handler{
+		client:         client,
+		publicBaseURL:  cfg.PublicBaseURL,
+		allowedS3Hosts: map[string]struct{}{cfg.S3Endpoint: {}},
+	}
+	// If S3_PUBLIC_URL is set, allow proxying presigned URLs using that host too.
+	if raw := strings.TrimSpace(cfg.S3PublicURL); raw != "" {
+		if !strings.Contains(raw, "://") {
+			if cfg.S3UseSSL {
+				raw = "https://" + raw
+			} else {
+				raw = "http://" + raw
+			}
+		}
+		if u, err := url.Parse(raw); err == nil && u.Host != "" {
+			h.allowedS3Hosts[u.Host] = struct{}{}
+		}
+	}
 
 	// Standalone streaming proxy endpoints used by the shared /upload page.
 	// These routes are intentionally NOT under /api so the nginx frontend can
