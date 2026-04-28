@@ -560,11 +560,44 @@ function resetUploadLink() {
 }
 
 async function copyToClipboard(text) {
+  if (!text) {
+    ElMessage.warning('Nothing to copy')
+    return
+  }
   try {
-    await navigator.clipboard.writeText(text)
-    ElMessage.success('Copied to clipboard')
-  } catch {
-    ElMessage.error('Failed to copy')
+    // Prefer async clipboard API when available (requires secure context in most browsers).
+    if (window.isSecureContext && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      ElMessage.success('Copied to clipboard')
+      return
+    }
+    throw new Error('Clipboard API unavailable')
+  } catch (e) {
+    // Fallback for http / older browsers / permission issues.
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.setAttribute('readonly', '')
+      ta.style.position = 'fixed'
+      ta.style.top = '-9999px'
+      ta.style.left = '-9999px'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.focus()
+      ta.select()
+      ta.setSelectionRange(0, ta.value.length)
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      if (ok) {
+        ElMessage.success('Copied to clipboard')
+        return
+      }
+      throw new Error('execCommand returned false')
+    } catch (e2) {
+      ElMessage.error('Failed to copy')
+      // Keep console detail for debugging without spamming UI.
+      console.warn('copyToClipboard failed', e, e2)
+    }
   }
 }
 
