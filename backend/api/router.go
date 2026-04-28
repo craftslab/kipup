@@ -12,7 +12,7 @@ func NewRouter(client *storage.Client) *gin.Engine {
 
 	r.Use(cors.New(cors.Config{
 		AllowAllOrigins:  true,
-		AllowMethods:     []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Disposition", "Content-Length"},
 		AllowCredentials: false,
@@ -32,6 +32,10 @@ func NewRouter(client *storage.Client) *gin.Engine {
 		v1.GET("/objects/:bucket/*key", h.DownloadObject)
 		v1.POST("/objects/:bucket", h.UploadObject)
 		v1.DELETE("/objects/:bucket/*key", h.DeleteObject)
+
+		// Presigned URL generation
+		v1.GET("/presign/download/:bucket/*key", h.GenerateDownloadLink)
+		v1.GET("/presign/upload/:bucket/*key", h.GenerateUploadLink)
 	}
 
 	return r
