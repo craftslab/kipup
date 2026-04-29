@@ -14,7 +14,7 @@ A lightweight **Go + Vue 3** web application for browsing, uploading and downloa
 - 🗑️ Delete individual files or entire folders (recursive)
 - 🧰 Batch download, move, rename, and delete for files/folders
 - 🔎 Search objects by name, size, prefix, and modification time
-- 🧾 Built-in task center, operation history, cleanup policies, and webhook delivery log
+- 🧾 Built-in task center, operation history, cleanup policies, and webhook
 - 🐳 One-command **Docker Compose** deployment (MinIO + backend + frontend)
 
 ## Architecture
