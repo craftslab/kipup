@@ -81,12 +81,12 @@ func sanitizeUploadRelativePath(name string) (string, error) {
 	raw := strings.TrimSpace(strings.ReplaceAll(name, "\\", "/"))
 	for _, segment := range strings.Split(raw, "/") {
 		if segment == ".." {
-			return "", errors.New("upload path must stay within the selected folder")
+			return "", errors.New("upload path contains invalid '..' segments")
 		}
 	}
 	cleaned := strings.TrimPrefix(path.Clean("/"+raw), "/")
 	if cleaned == "" || cleaned == "." {
-		return "", errors.New("upload path is required")
+		return "", errors.New("upload path cannot be empty or only '.'")
 	}
 	return cleaned, nil
 }
@@ -96,12 +96,12 @@ func buildUploadObjectKey(prefix, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	cleanPrefix, err := sanitizeUploadRelativePath(strings.TrimSuffix(strings.TrimSpace(prefix), "/"))
-	if err != nil && strings.TrimSpace(prefix) != "" {
-		return "", err
-	}
 	if strings.TrimSpace(prefix) == "" {
 		return cleanName, nil
+	}
+	cleanPrefix, err := sanitizeUploadRelativePath(strings.TrimSuffix(strings.TrimSpace(prefix), "/"))
+	if err != nil {
+		return "", err
 	}
 	return cleanPrefix + "/" + cleanName, nil
 }
@@ -284,7 +284,15 @@ func (h *Handler) UploadObject(c *gin.Context) {
 	prefix := c.Query("prefix")
 	actor := actorFromRequest(c)
 	taskID := strings.TrimSpace(c.GetHeader("X-Task-ID"))
-	totalItems, _ := strconv.Atoi(strings.TrimSpace(c.GetHeader("X-Total-Items")))
+	totalItems := 0
+	if rawTotal := strings.TrimSpace(c.GetHeader("X-Total-Items")); rawTotal != "" {
+		parsed, err := strconv.Atoi(rawTotal)
+		if err != nil || parsed <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "X-Total-Items must be a positive integer"})
+			return
+		}
+		totalItems = parsed
+	}
 
 	mr, err := c.Request.MultipartReader()
 	if err != nil {
@@ -321,7 +329,7 @@ func (h *Handler) UploadObject(c *gin.Context) {
 			contentType = "application/octet-stream"
 		}
 		if taskID == "" {
-			taskID = h.service.UpsertTask(taskID, "upload", bucket, prefix, actor, max(totalItems, 1), map[string]string{"prefix": prefix, "mode": "stream"})
+			taskID = h.service.UpsertTask(taskID, "upload", bucket, prefix, actor, max(totalItems, 1), map[string]string{"mode": "stream"})
 		}
 		if _, err := h.client.PutObjectStream(c.Request.Context(), bucket, key, part, -1, contentType); err != nil {
 			h.service.UpdateTaskProgress(taskID, key, completed, app.TaskItem{SourceKey: key, Status: "failed", Error: err.Error()})
@@ -332,7 +340,7 @@ func (h *Handler) UploadObject(c *gin.Context) {
 		}
 		completed++
 		uploadedKeys = append(uploadedKeys, key)
-		h.service.UpsertTask(taskID, "upload", bucket, prefix, actor, max(totalItems, completed), map[string]string{"prefix": prefix, "mode": "stream"})
+		h.service.UpsertTask(taskID, "upload", bucket, prefix, actor, max(totalItems, completed), map[string]string{"mode": "stream"})
 		h.service.UpdateTaskProgress(taskID, key, completed, app.TaskItem{SourceKey: key, Status: "uploaded"})
 		uploaded = append(uploaded, gin.H{"key": key, "name": filename})
 	}
@@ -366,7 +374,7 @@ func (h *Handler) InitResumableUpload(c *gin.Context) {
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	taskID := h.service.UpsertTask(req.TaskID, "upload", bucket, prefix, actor, max(req.TotalItems, 1), map[string]string{"prefix": prefix, "mode": "resumable"})
+	taskID := h.service.UpsertTask(req.TaskID, "upload", bucket, prefix, actor, max(req.TotalItems, 1), map[string]string{"mode": "resumable"})
 	uploadID, err := h.client.NewMultipartUpload(c.Request.Context(), bucket, key, contentType)
 	if err != nil {
 		h.service.FinishTask(taskID, app.TaskFailed, err.Error())
@@ -385,11 +393,11 @@ func (h *Handler) InitResumableUpload(c *gin.Context) {
 func (h *Handler) GetResumableUploadStatus(c *gin.Context) {
 	bucket := c.Param("bucket")
 	uploadID := strings.TrimSpace(c.Query("uploadId"))
-	key, err := buildUploadObjectKey(c.Query("prefix"), c.Query("key"))
 	if uploadID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "uploadId is required"})
 		return
 	}
+	key, err := buildUploadObjectKey(c.Query("prefix"), c.Query("key"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -409,11 +417,11 @@ func (h *Handler) GetResumableUploadStatus(c *gin.Context) {
 func (h *Handler) UploadResumablePart(c *gin.Context) {
 	bucket := c.Param("bucket")
 	uploadID := strings.TrimSpace(c.Query("uploadId"))
-	key, err := buildUploadObjectKey(c.Query("prefix"), c.Query("key"))
 	if uploadID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "uploadId is required"})
 		return
 	}
+	key, err := buildUploadObjectKey(c.Query("prefix"), c.Query("key"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -462,7 +470,7 @@ func (h *Handler) CompleteResumableUpload(c *gin.Context) {
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	taskID := h.service.UpsertTask(req.TaskID, "upload", bucket, prefix, actor, max(req.TotalItems, 1), map[string]string{"prefix": prefix, "mode": "resumable"})
+	taskID := h.service.UpsertTask(req.TaskID, "upload", bucket, prefix, actor, max(req.TotalItems, 1), map[string]string{"mode": "resumable"})
 	if _, err := h.client.CompleteMultipartUpload(c.Request.Context(), bucket, key, req.UploadID, parts, contentType); err != nil {
 		h.service.UpdateTaskProgress(taskID, key, req.CompletedItems, app.TaskItem{SourceKey: key, Status: "failed", Error: err.Error()})
 		h.service.FinishTask(taskID, app.TaskFailed, err.Error())
@@ -488,11 +496,11 @@ func (h *Handler) CompleteResumableUpload(c *gin.Context) {
 func (h *Handler) AbortResumableUpload(c *gin.Context) {
 	bucket := c.Param("bucket")
 	uploadID := strings.TrimSpace(c.Query("uploadId"))
-	key, err := buildUploadObjectKey(c.Query("prefix"), c.Query("key"))
 	if uploadID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "uploadId is required"})
 		return
 	}
+	key, err := buildUploadObjectKey(c.Query("prefix"), c.Query("key"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

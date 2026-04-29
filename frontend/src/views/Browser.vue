@@ -702,14 +702,14 @@ function addFiles(files) {
   for (const file of files) {
     const relativePath = normalizeUploadPath(file.webkitRelativePath || file.name)
     if (!relativePath) continue
-    const prefix = currentPrefix.value.replace(/\/$/, '')
+    const prefix = normalizePrefix(currentPrefix.value).replace(/\/$/, '')
     const key = buildUploadObjectKey(relativePath, prefix)
     const id = buildUploadEntryId(key, file)
     const existing = uploadFiles.value.find((item) => item.id === id)
     const persisted = getPersistedUploadSession(id)
     if (existing) {
       existing.file = file
-      existing.status = existing.status === 'done' ? 'done' : persisted?.uploadId ? 'resumable' : existing.status
+      existing.status = resolveUploadStatus(existing.status, persisted)
       existing.error = persisted?.error || ''
       continue
     }
@@ -723,7 +723,7 @@ function addFiles(files) {
       lastModified: file.lastModified,
       contentType: file.type || 'application/octet-stream',
       file,
-      status: persisted?.uploadId ? (persisted.status === 'error' ? 'error' : 'resumable') : 'pending',
+      status: resolveUploadStatus('pending', persisted),
       error: persisted?.error || '',
       uploadedBytes: persisted?.uploadedBytes || 0,
       uploadId: persisted?.uploadId || '',
@@ -892,6 +892,12 @@ function buildUploadEntryId(key, file) {
   return [currentBucket.value, key, file.size, file.lastModified].join('::')
 }
 
+function resolveUploadStatus(currentStatus, persisted) {
+  if (currentStatus === 'done') return 'done'
+  if (!persisted?.uploadId) return currentStatus
+  return persisted.status === 'error' ? 'error' : 'resumable'
+}
+
 function normalizeUploadPath(value) {
   return (value || '')
     .replace(/\\/g, '/')
@@ -917,7 +923,11 @@ function calculateUploadedBytes(item) {
 
 function refreshUploadProgress() {
   if (!uploadStats.value.totalBytes) {
-    uploadProgress.value = uploadStats.value.total ? (uploadStats.value.completed === uploadStats.value.total ? 100 : 0) : 0
+    if (!uploadStats.value.total) {
+      uploadProgress.value = 0
+      return
+    }
+    uploadProgress.value = uploadStats.value.completed === uploadStats.value.total ? 100 : 0
     return
   }
   uploadProgress.value = Math.min(100, Math.round((uploadStats.value.loadedBytes / uploadStats.value.totalBytes) * 100))
