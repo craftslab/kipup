@@ -1135,10 +1135,18 @@ async function generateDownloadLinkAction() {
   generatingDownloadLink.value = true
   try {
     const key = downloadLinkTarget.value.key
-    const [{ data: downloadData }, { data: uploadData }] = await Promise.all([
-      generateDownloadLink(currentBucket.value, key, downloadLinkExpiry.value),
-      generateUploadLink(currentBucket.value, key, downloadLinkExpiry.value)
-    ])
+    let downloadData
+    let uploadData
+    try {
+      ;({ data: downloadData } = await generateDownloadLink(currentBucket.value, key, downloadLinkExpiry.value))
+    } catch (error) {
+      throw new Error(`Failed to generate download access / 下载访问生成失败：${error.response?.data?.error || error.message}`)
+    }
+    try {
+      ;({ data: uploadData } = await generateUploadLink(currentBucket.value, key, downloadLinkExpiry.value))
+    } catch (error) {
+      throw new Error(`Failed to generate upload access / 上传访问生成失败：${error.response?.data?.error || error.message}`)
+    }
     const filename = key.split('/').pop() || key
     const params = new URLSearchParams({
       url: uploadData.url,
@@ -1147,7 +1155,7 @@ async function generateDownloadLinkAction() {
     })
     downloadLinkUrl.value = `${window.location.origin}/upload?${params.toString()}`
   } catch (error) {
-    ElMessage.error('Failed to generate link / 生成链接失败：' + (error.response?.data?.error || error.message))
+    ElMessage.error(error.message || 'Failed to generate link / 生成链接失败')
   } finally {
     generatingDownloadLink.value = false
   }

@@ -3,25 +3,25 @@
     <div class="upload-card">
       <div class="upload-shell-copy">
         <p class="upload-shell-eyebrow">Kipup shared file portal / Kipup 文件共享入口</p>
-        <h1 class="upload-shell-title">Download the current file or upload a new one.</h1>
-        <p class="upload-shell-subtitle">One shared page for both directions, with the same link expiry window. / 同一个共享页面，同时支持下载与上传，并沿用相同的链接有效期。</p>
+        <h1 class="upload-shell-title">{{ heroTitle }}</h1>
+        <p class="upload-shell-subtitle">{{ heroSubtitle }}</p>
       </div>
       <div class="upload-card-header">
         <el-icon :size="28" color="#201912"><UploadFilled /></el-icon>
-        <span class="upload-card-title">File download & upload / 文件下载与上传</span>
+        <span class="upload-card-title">{{ cardTitle }}</span>
       </div>
 
       <p v-if="targetFilename" class="upload-hint">
         Shared file / 共享文件：<strong>{{ targetFilename }}</strong>
       </p>
 
-      <div v-if="downloadUrl" class="download-actions">
+      <div v-if="canDownload && !expired" class="download-actions">
         <el-button class="download-btn" @click="downloadFile">
           Download current file / 下载当前文件
         </el-button>
       </div>
 
-      <template v-if="presignedUrl && !done && !expired">
+      <template v-if="canUpload && !done && !expired">
         <!-- Drop zone -->
         <div
           class="drop-zone"
@@ -81,7 +81,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { UploadFilled, Document, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 
@@ -99,6 +99,23 @@ const done = ref(false)
 const expired = ref(false)
 const errorMsg = ref('')
 const fileInputRef = ref(null)
+const canUpload = computed(() => Boolean(presignedUrl.value))
+const canDownload = computed(() => Boolean(downloadUrl.value))
+const heroTitle = computed(() => {
+  if (canUpload.value && canDownload.value) return 'Download the current file or upload a new one.'
+  if (canDownload.value) return 'Download the current file from this shared link.'
+  return 'Upload a file from this shared link.'
+})
+const heroSubtitle = computed(() => {
+  if (canUpload.value && canDownload.value) return 'One shared page for both directions, with the same link expiry window. / 同一个共享页面，同时支持下载与上传，并沿用相同的链接有效期。'
+  if (canDownload.value) return 'This shared page is ready for downloading within the link expiry window. / 该共享页面可在链接有效期内用于下载。'
+  return 'This shared page is ready for uploading within the link expiry window. / 该共享页面可在链接有效期内用于上传。'
+})
+const cardTitle = computed(() => {
+  if (canUpload.value && canDownload.value) return 'File download & upload / 文件下载与上传'
+  if (canDownload.value) return 'File download / 文件下载'
+  return 'File upload / 文件上传'
+})
 
 onMounted(() => {
   presignedUrl.value = route.query.url || ''
