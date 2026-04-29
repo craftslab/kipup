@@ -162,6 +162,8 @@ GET /api/v1/presign/upload/:bucket/*key?expiry=3600
 }
 ```
 
+In the web UI, **Generate Download Link** now creates a shared page that can both download the current file and upload a replacement using the same selected expiry.
+
 ## License
 
 [Apache 2.0](LICENSE)

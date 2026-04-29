@@ -2,20 +2,26 @@
   <div class="upload-page">
     <div class="upload-card">
       <div class="upload-shell-copy">
-        <p class="upload-shell-eyebrow">Kipup upload portal / Kipup 上传入口</p>
-        <h1 class="upload-shell-title">Drop in a file and ship it with confidence.</h1>
-        <p class="upload-shell-subtitle">A quieter upload flow, with calmer copy in both English and Chinese. / 用更统一的中英文文案，完成一次更从容的上传。</p>
+        <p class="upload-shell-eyebrow">Kipup shared file portal / Kipup 文件共享入口</p>
+        <h1 class="upload-shell-title">Download the current file or upload a new one.</h1>
+        <p class="upload-shell-subtitle">One shared page for both directions, with the same link expiry window. / 同一个共享页面，同时支持下载与上传，并沿用相同的链接有效期。</p>
       </div>
       <div class="upload-card-header">
         <el-icon :size="28" color="#201912"><UploadFilled /></el-icon>
-        <span class="upload-card-title">File upload / 文件上传</span>
+        <span class="upload-card-title">File download & upload / 文件下载与上传</span>
       </div>
 
       <p v-if="targetFilename" class="upload-hint">
-        Upload destination / 上传目标：<strong>{{ targetFilename }}</strong>
+        Shared file / 共享文件：<strong>{{ targetFilename }}</strong>
       </p>
 
-      <template v-if="!done && !expired">
+      <div v-if="downloadUrl" class="download-actions">
+        <el-button class="download-btn" @click="downloadFile">
+          Download current file / 下载当前文件
+        </el-button>
+      </div>
+
+      <template v-if="presignedUrl && !done && !expired">
         <!-- Drop zone -->
         <div
           class="drop-zone"
@@ -65,7 +71,7 @@
       <!-- Expired / invalid link state -->
       <div v-if="expired" class="result result--error">
         <el-icon :size="48" color="#f56c6c"><CircleClose /></el-icon>
-        <p>This upload link is invalid or has expired. / 上传链接无效或已过期。</p>
+        <p>This shared link is invalid or has expired. / 共享链接无效或已过期。</p>
       </div>
 
       <!-- Error message -->
@@ -82,6 +88,7 @@ import { UploadFilled, Document, CircleCheck, CircleClose } from '@element-plus/
 const route = useRoute()
 
 const presignedUrl = ref('')
+const downloadUrl = ref('')
 const targetFilename = ref('')
 
 const selectedFile = ref(null)
@@ -95,11 +102,17 @@ const fileInputRef = ref(null)
 
 onMounted(() => {
   presignedUrl.value = route.query.url || ''
+  downloadUrl.value = route.query.downloadUrl || ''
   targetFilename.value = route.query.filename || ''
-  if (!presignedUrl.value) {
+  if (!presignedUrl.value && !downloadUrl.value) {
     expired.value = true
   }
 })
+
+function downloadFile() {
+  if (!downloadUrl.value) return
+  window.open(downloadUrl.value, '_blank', 'noopener')
+}
 
 function triggerFileInput() {
   if (!uploading.value) fileInputRef.value?.click()
@@ -254,6 +267,14 @@ function formatSize(bytes) {
   margin: 0;
   font-size: 14px;
   color: #5c5146;
+}
+
+.download-actions {
+  display: flex;
+}
+
+.download-btn {
+  min-width: 220px;
 }
 
 .drop-zone {

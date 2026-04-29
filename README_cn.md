@@ -157,6 +157,8 @@ GET /api/v1/presign/upload/:bucket/*key?expiry=3600
 }
 ```
 
+在 Web 界面中，**生成下载链接** 现在会生成一个共享页面，既可下载当前文件，也可在相同的有效期内上传替换文件。
+
 ## 许可证
 
 [Apache 2.0](LICENSE)

@@ -1134,8 +1134,18 @@ async function generateDownloadLinkAction() {
   if (!downloadLinkTarget.value) return
   generatingDownloadLink.value = true
   try {
-    const { data } = await generateDownloadLink(currentBucket.value, downloadLinkTarget.value.key, downloadLinkExpiry.value)
-    downloadLinkUrl.value = data.url
+    const key = downloadLinkTarget.value.key
+    const [{ data: downloadData }, { data: uploadData }] = await Promise.all([
+      generateDownloadLink(currentBucket.value, key, downloadLinkExpiry.value),
+      generateUploadLink(currentBucket.value, key, downloadLinkExpiry.value)
+    ])
+    const filename = key.split('/').pop() || key
+    const params = new URLSearchParams({
+      url: uploadData.url,
+      downloadUrl: downloadData.url,
+      filename
+    })
+    downloadLinkUrl.value = `${window.location.origin}/upload?${params.toString()}`
   } catch (error) {
     ElMessage.error('Failed to generate link / 生成链接失败：' + (error.response?.data?.error || error.message))
   } finally {
