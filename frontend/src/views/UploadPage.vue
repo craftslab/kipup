@@ -66,7 +66,7 @@
       <!-- Expired / invalid link state -->
       <div v-if="expired" class="result result--error">
         <el-icon :size="48" color="#f56c6c"><CircleClose /></el-icon>
-        <p>This shared link is invalid or has expired.</p>
+        <p>{{ linkStatusMessage }}</p>
       </div>
 
       <!-- Error message -->
@@ -92,17 +92,24 @@ const uploading = ref(false)
 const progress = ref(0)
 const done = ref(false)
 const expired = ref(false)
+const invalidLink = ref(false)
 const errorMsg = ref('')
 const fileInputRef = ref(null)
+const downloadProxyPath = '/api/download'
+const uploadProxyPath = '/api/upload'
 
 const pageTitle = computed(() => (downloadUrl.value ? 'Shared File' : 'File Upload'))
 const targetLabel = computed(() => (downloadUrl.value ? 'Shared file' : 'Upload destination'))
+const linkStatusMessage = computed(() => (
+  invalidLink.value ? 'This link is missing required parameters.' : 'This shared link is invalid or has expired.'
+))
 
 onMounted(() => {
   uploadUrl.value = route.query.uploadUrl || route.query.url || ''
   downloadUrl.value = route.query.downloadUrl || ''
   targetFilename.value = route.query.filename || ''
   if (!uploadUrl.value && !downloadUrl.value) {
+    invalidLink.value = true
     expired.value = true
   }
 })
@@ -149,7 +156,7 @@ function startDownload() {
   const qs = new URLSearchParams({ url: downloadUrl.value })
   if (targetFilename.value) qs.set('filename', targetFilename.value)
   const link = document.createElement('a')
-  link.href = `/api/download?${qs.toString()}`
+  link.href = `${downloadProxyPath}?${qs.toString()}`
   document.body.appendChild(link)
   link.click()
   link.remove()
@@ -161,7 +168,7 @@ function uploadWithProgress(url, file, filename) {
     const qs = new URLSearchParams({ url })
     if (filename) qs.set('filename', filename)
     // Use /api proxy route to avoid special-case nginx handling of /upload.
-    xhr.open('POST', `/api/upload?${qs.toString()}`)
+    xhr.open('POST', `${uploadProxyPath}?${qs.toString()}`)
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
         progress.value = Math.round((e.loaded / e.total) * 100)
