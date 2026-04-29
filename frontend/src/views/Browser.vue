@@ -1,6 +1,10 @@
 <template>
   <div class="browser-layout">
     <aside class="sidebar">
+      <div class="sidebar-intro">
+        <p class="sidebar-eyebrow">Storage index</p>
+        <p class="sidebar-copy">A curated view of every bucket, ready for upload, cleanup, and sharing.</p>
+      </div>
       <div class="sidebar-header">
         <span class="sidebar-title">Buckets</span>
         <el-button circle type="primary" :icon="Plus" size="small" title="Create bucket" @click="openCreateBucket" />
@@ -20,121 +24,157 @@
         </ul>
         <el-empty v-if="!buckets.length" description="No buckets" :image-size="60" />
       </el-scrollbar>
+      <div class="sidebar-footer">
+        <span>{{ buckets.length }} workspace{{ buckets.length === 1 ? '' : 's' }}</span>
+      </div>
     </aside>
 
     <div class="main-area">
-      <div class="toolbar">
-        <el-breadcrumb separator="/" class="breadcrumb">
-          <el-breadcrumb-item><span class="breadcrumb-link" @click="goBucketRoot">Home</span></el-breadcrumb-item>
-          <el-breadcrumb-item v-if="currentBucket">
-            <span class="breadcrumb-link" @click="goBucketRoot">{{ currentBucket }}</span>
-          </el-breadcrumb-item>
-          <el-breadcrumb-item v-for="(part, i) in prefixParts" :key="i">
-            <span class="breadcrumb-link" @click="navigateToDepth(i)">{{ part }}</span>
-          </el-breadcrumb-item>
-        </el-breadcrumb>
-
-        <div class="toolbar-actions">
-          <el-button v-if="currentBucket" :icon="Search" @click="searchVisible = !searchVisible">Search</el-button>
-          <el-button v-if="currentBucket" :icon="Clock" @click="openHistoryDrawer">History</el-button>
-          <el-button v-if="currentBucket" :icon="Finished" @click="openTaskDrawer">Tasks</el-button>
-          <el-button v-if="currentBucket" :icon="Brush" @click="openCleanupDrawer">Cleanup</el-button>
-          <el-button v-if="currentBucket" :icon="Connection" @click="openWebhookDrawer">Webhooks</el-button>
-          <el-button v-if="currentBucket" type="primary" :icon="UploadFilled" @click="showUploadDialog = true">Upload</el-button>
-          <el-button v-if="currentBucket" :icon="Share" @click="openUploadLinkDialog">Upload Link</el-button>
-          <el-button
-            v-if="currentBucket && !currentPrefix"
-            type="danger"
-            :icon="Delete"
-            plain
-            @click="confirmDeleteBucket"
-          >Delete Bucket</el-button>
+      <section class="workspace-intro">
+        <div class="workspace-copy">
+          <p class="workspace-eyebrow">{{ currentBucket ? 'Active bucket' : 'Anthropic-inspired workspace' }}</p>
+          <h2 class="workspace-title">{{ currentBucket || 'Select a bucket to start curating storage' }}</h2>
+          <p class="workspace-description">
+            {{ currentBucket
+              ? `Manage ${currentBucket} from one warm, focused surface${currentPrefix ? ` — ${currentPrefix}` : '.'}`
+              : 'Choose a bucket on the left to browse objects, share links, and run cleanup flows without leaving the workspace.' }}
+          </p>
         </div>
-      </div>
-
-      <div v-if="currentBucket && searchVisible" class="search-panel">
-        <el-form :inline="true" class="search-form">
-          <el-form-item label="Name">
-            <el-input v-model="searchForm.name" placeholder="contains..." clearable />
-          </el-form-item>
-          <el-form-item label="Min Size">
-            <el-input-number v-model="searchForm.minSize" :min="0" :controls="false" />
-          </el-form-item>
-          <el-form-item label="Max Size">
-            <el-input-number v-model="searchForm.maxSize" :min="0" :controls="false" />
-          </el-form-item>
-          <el-form-item label="Modified">
-            <el-date-picker
-              v-model="searchDateRange"
-              type="datetimerange"
-              range-separator="to"
-              start-placeholder="Start"
-              end-placeholder="End"
-              value-format="YYYY-MM-DDTHH:mm:ss[Z]"
-            />
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" @click="applySearch">Search</el-button>
-            <el-button @click="resetSearch">Reset</el-button>
-          </el-form-item>
-        </el-form>
-      </div>
-
-      <div v-if="selectedRows.length" class="batch-toolbar">
-        <span>{{ selectedRows.length }} selected</span>
-        <div class="batch-toolbar-actions">
-          <el-button size="small" :icon="Download" @click="downloadSelected">Download Zip</el-button>
-          <el-button size="small" :icon="FolderOpened" @click="openMoveDialog">Move</el-button>
-          <el-button size="small" :icon="Edit" @click="openRenameDialog">Rename</el-button>
-          <el-button size="small" type="danger" :icon="Delete" plain @click="confirmBatchDelete">Delete</el-button>
+        <div class="workspace-stats">
+          <article class="stat-card">
+            <span class="stat-label">Buckets</span>
+            <strong class="stat-value">{{ buckets.length }}</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Visible files</span>
+            <strong class="stat-value">{{ visibleFileCount }}</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Visible folders</span>
+            <strong class="stat-value">{{ visibleFolderCount }}</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Visible data</span>
+            <strong class="stat-value">{{ formatSize(visibleObjectBytes) }}</strong>
+          </article>
         </div>
-      </div>
+      </section>
 
-      <el-table
-        v-loading="loading"
-        :data="objects"
-        style="width: 100%"
-        height="calc(100vh - 180px)"
-        empty-text="No objects – select a bucket or upload files"
-        @selection-change="onSelectionChange"
-      >
-        <el-table-column type="selection" width="44" />
-        <el-table-column label="Name" min-width="320" show-overflow-tooltip>
-          <template #default="{ row }">
-            <div class="file-row" @click="handleRowClick(row)">
-              <el-icon class="file-icon" :color="row.isDir ? '#e6a23c' : '#909399'">
-                <Folder v-if="row.isDir" />
-                <Document v-else />
-              </el-icon>
-              <span :class="row.isDir ? 'folder-name' : ''">{{ row.name }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="Size" width="120" align="right">
-          <template #default="{ row }">
-            <span v-if="!row.isDir">{{ formatSize(row.size) }}</span>
-            <span v-else style="color:#bbb">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="Last Modified" width="190">
-          <template #default="{ row }">
-            <span v-if="!row.isDir">{{ formatDate(row.lastModified) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="Actions" width="270" fixed="right">
-          <template #default="{ row }">
-            <el-button v-if="!row.isDir" type="primary" :icon="Download" size="small" @click.stop="downloadFile(row)">
-              Download
-            </el-button>
-            <el-button v-if="!row.isDir" :icon="Share" size="small" @click.stop="openDownloadLinkDialog(row)">
-              Copy Link
-            </el-button>
-            <el-button type="danger" :icon="Delete" size="small" plain @click.stop="confirmDeleteObject(row)">
-              Delete
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <section class="workspace-panel">
+        <div class="toolbar">
+          <el-breadcrumb separator="/" class="breadcrumb">
+            <el-breadcrumb-item><span class="breadcrumb-link" @click="goBucketRoot">Home</span></el-breadcrumb-item>
+            <el-breadcrumb-item v-if="currentBucket">
+              <span class="breadcrumb-link" @click="goBucketRoot">{{ currentBucket }}</span>
+            </el-breadcrumb-item>
+            <el-breadcrumb-item v-for="(part, i) in prefixParts" :key="i">
+              <span class="breadcrumb-link" @click="navigateToDepth(i)">{{ part }}</span>
+            </el-breadcrumb-item>
+          </el-breadcrumb>
+
+          <div class="toolbar-actions">
+            <el-button v-if="currentBucket" :icon="Search" @click="searchVisible = !searchVisible">Search</el-button>
+            <el-button v-if="currentBucket" :icon="Clock" @click="openHistoryDrawer">History</el-button>
+            <el-button v-if="currentBucket" :icon="Finished" @click="openTaskDrawer">Tasks</el-button>
+            <el-button v-if="currentBucket" :icon="Brush" @click="openCleanupDrawer">Cleanup</el-button>
+            <el-button v-if="currentBucket" :icon="Connection" @click="openWebhookDrawer">Webhooks</el-button>
+            <el-button v-if="currentBucket" type="primary" :icon="UploadFilled" @click="showUploadDialog = true">Upload</el-button>
+            <el-button v-if="currentBucket" :icon="Share" @click="openUploadLinkDialog">Upload Link</el-button>
+            <el-button
+              v-if="currentBucket && !currentPrefix"
+              type="danger"
+              :icon="Delete"
+              plain
+              @click="confirmDeleteBucket"
+            >Delete Bucket</el-button>
+          </div>
+        </div>
+
+        <div v-if="currentBucket && searchVisible" class="search-panel">
+          <el-form :inline="true" class="search-form">
+            <el-form-item label="Name">
+              <el-input v-model="searchForm.name" placeholder="contains..." clearable />
+            </el-form-item>
+            <el-form-item label="Min Size">
+              <el-input-number v-model="searchForm.minSize" :min="0" :controls="false" />
+            </el-form-item>
+            <el-form-item label="Max Size">
+              <el-input-number v-model="searchForm.maxSize" :min="0" :controls="false" />
+            </el-form-item>
+            <el-form-item label="Modified">
+              <el-date-picker
+                v-model="searchDateRange"
+                type="datetimerange"
+                range-separator="to"
+                start-placeholder="Start"
+                end-placeholder="End"
+                value-format="YYYY-MM-DDTHH:mm:ss[Z]"
+              />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="applySearch">Search</el-button>
+              <el-button @click="resetSearch">Reset</el-button>
+            </el-form-item>
+          </el-form>
+        </div>
+
+        <div v-if="selectedRows.length" class="batch-toolbar">
+          <span>{{ selectedRows.length }} selected</span>
+          <div class="batch-toolbar-actions">
+            <el-button size="small" :icon="Download" @click="downloadSelected">Download Zip</el-button>
+            <el-button size="small" :icon="FolderOpened" @click="openMoveDialog">Move</el-button>
+            <el-button size="small" :icon="Edit" @click="openRenameDialog">Rename</el-button>
+            <el-button size="small" type="danger" :icon="Delete" plain @click="confirmBatchDelete">Delete</el-button>
+          </div>
+        </div>
+
+        <el-table
+          v-loading="loading"
+          :data="objects"
+          class="objects-table"
+          style="width: 100%"
+          height="calc(100vh - 360px)"
+          empty-text="No objects – select a bucket or upload files"
+          @selection-change="onSelectionChange"
+        >
+          <el-table-column type="selection" width="44" />
+          <el-table-column label="Name" min-width="320" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="file-row" @click="handleRowClick(row)">
+                <el-icon class="file-icon" :color="row.isDir ? '#ad7f45' : '#7d7063'">
+                  <Folder v-if="row.isDir" />
+                  <Document v-else />
+                </el-icon>
+                <span :class="row.isDir ? 'folder-name' : ''">{{ row.name }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="Size" width="120" align="right">
+            <template #default="{ row }">
+              <span v-if="!row.isDir">{{ formatSize(row.size) }}</span>
+              <span v-else style="color:#b8aa99">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="Last Modified" width="190">
+            <template #default="{ row }">
+              <span v-if="!row.isDir">{{ formatDate(row.lastModified) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="Actions" width="270" fixed="right">
+            <template #default="{ row }">
+              <el-button v-if="!row.isDir" type="primary" :icon="Download" size="small" @click.stop="downloadFile(row)">
+                Download
+              </el-button>
+              <el-button v-if="!row.isDir" :icon="Share" size="small" @click.stop="openDownloadLinkDialog(row)">
+                Copy Link
+              </el-button>
+              <el-button type="danger" :icon="Delete" size="small" plain @click.stop="confirmDeleteObject(row)">
+                Delete
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </section>
     </div>
 
     <el-dialog v-model="showUploadDialog" title="Batch Upload" width="640px" @closed="resetUpload">
@@ -525,6 +565,9 @@ const uploadStats = computed(() => {
   const loadedBytes = uploadFiles.value.reduce((sum, item) => sum + Math.min(item.uploadedBytes || 0, item.size || 0), 0)
   return { total, completed, failed, totalBytes, loadedBytes }
 })
+const visibleFolderCount = computed(() => objects.value.filter((item) => item.isDir).length)
+const visibleFileCount = computed(() => objects.value.filter((item) => !item.isDir).length)
+const visibleObjectBytes = computed(() => objects.value.reduce((sum, item) => sum + (item.isDir ? 0 : item.size || 0), 0))
 
 const RESUMABLE_PART_SIZE = 8 * 1024 * 1024
 const RESUMABLE_UPLOAD_STORAGE_KEY = 'kipup-resumable-upload-sessions-v1'
@@ -1303,76 +1346,207 @@ function formatDate(value) {
 <style scoped>
 .browser-layout {
   display: flex;
-  height: calc(100vh - 60px);
-  overflow: hidden;
+  gap: 20px;
+  height: calc(100vh - 162px);
+  padding-top: 24px;
+  box-sizing: border-box;
 }
 
 .sidebar {
-  width: 220px;
-  min-width: 220px;
-  border-right: 1px solid #e4e7ed;
+  width: 260px;
+  min-width: 260px;
   display: flex;
   flex-direction: column;
-  background: #fafafa;
+  background: rgba(255, 252, 245, 0.82);
+  border: 1px solid rgba(69, 54, 42, 0.12);
+  border-radius: 28px;
+  box-shadow: 0 24px 80px rgba(59, 43, 31, 0.08);
+  overflow: hidden;
+}
+
+.sidebar-intro,
+.sidebar-footer {
+  padding: 22px 22px 0;
+}
+
+.sidebar-eyebrow {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8b7f72;
+}
+
+.sidebar-copy,
+.sidebar-footer {
+  color: #6f6256;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid #e4e7ed;
+  padding: 18px 22px 14px;
 }
 
 .sidebar-title {
   font-weight: 600;
-  font-size: 13px;
-  color: #606266;
+  font-size: 12px;
+  color: #8b7f72;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.12em;
 }
 
 .sidebar-scroll {
   flex: 1;
+  padding: 0 10px 12px;
 }
 
 .bucket-list {
   list-style: none;
   margin: 0;
-  padding: 6px 0;
+  padding: 0;
 }
 
 .bucket-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 18px;
   cursor: pointer;
   font-size: 14px;
-  color: #303133;
-  transition: background 0.15s;
+  color: #2b241d;
+  transition: 0.18s ease;
 }
 
 .bucket-item:hover {
-  background: #ecf5ff;
+  background: rgba(237, 226, 210, 0.52);
+  border-color: rgba(69, 54, 42, 0.08);
 }
 
 .bucket-item.active {
-  background: #409eff;
-  color: #fff;
+  background: #201912;
+  color: #f9f3ea;
+  box-shadow: 0 18px 36px rgba(32, 25, 18, 0.18);
 }
 
 .bucket-name {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidebar-footer {
+  padding: 0 22px 22px;
+  border-top: 1px solid rgba(69, 54, 42, 0.08);
 }
 
 .main-area {
   flex: 1;
   display: flex;
   flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.workspace-intro {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.workspace-copy,
+.workspace-stats {
+  background: rgba(255, 252, 245, 0.82);
+  border: 1px solid rgba(69, 54, 42, 0.12);
+  border-radius: 28px;
+  box-shadow: 0 24px 80px rgba(59, 43, 31, 0.08);
+}
+
+.workspace-copy {
+  flex: 1.6;
+  padding: 28px 30px;
+}
+
+.workspace-eyebrow {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8b7f72;
+}
+
+.workspace-title {
+  margin: 0;
+  font-family: Iowan Old Style, Palatino Linotype, Book Antiqua, Georgia, serif;
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: #201912;
+}
+
+.workspace-description {
+  max-width: 760px;
+  margin: 14px 0 0;
+  color: #5c5146;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.workspace-stats {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 104px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  background: rgba(237, 226, 210, 0.38);
+  border: 1px solid rgba(69, 54, 42, 0.08);
+}
+
+.stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8b7f72;
+}
+
+.stat-value {
+  margin-top: 18px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: #201912;
+}
+
+.workspace-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
+  background: rgba(255, 252, 245, 0.82);
+  border: 1px solid rgba(69, 54, 42, 0.12);
+  border-radius: 28px;
+  box-shadow: 0 24px 80px rgba(59, 43, 31, 0.08);
 }
 
 .toolbar,
@@ -1380,8 +1554,8 @@ function formatDate(value) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  border-bottom: 1px solid #e4e7ed;
+  padding: 18px 22px;
+  border-bottom: 1px solid rgba(69, 54, 42, 0.08);
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -1400,12 +1574,17 @@ function formatDate(value) {
 
 .breadcrumb-link {
   cursor: pointer;
-  color: #409eff;
+  color: #5c5146;
+  transition: color 0.2s ease;
+}
+
+.breadcrumb-link:hover {
+  color: #201912;
 }
 
 .search-panel {
-  padding: 12px 16px 0;
-  border-bottom: 1px solid #e4e7ed;
+  padding: 18px 22px 0;
+  border-bottom: 1px solid rgba(69, 54, 42, 0.08);
 }
 
 .search-form,
@@ -1413,36 +1592,54 @@ function formatDate(value) {
   margin-bottom: 16px;
 }
 
+.batch-toolbar {
+  background: rgba(237, 226, 210, 0.34);
+}
+
+.objects-table {
+  margin: 0 22px 22px;
+  width: calc(100% - 44px);
+}
+
 .file-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
+}
+
+.file-icon {
+  width: 22px;
+  height: 22px;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(237, 226, 210, 0.52);
 }
 
 .folder-name {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .drop-zone {
-  border: 2px dashed #c0c4cc;
-  border-radius: 8px;
-  padding: 32px 24px;
+  border: 1px dashed rgba(69, 54, 42, 0.22);
+  border-radius: 24px;
+  padding: 36px 24px;
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
+  background: rgba(237, 226, 210, 0.22);
+  transition: 0.2s ease;
 }
 
 .drop-zone:hover,
 .drop-zone--over {
-  border-color: #409eff;
-  background: #ecf5ff;
+  border-color: rgba(32, 25, 18, 0.28);
+  background: rgba(237, 226, 210, 0.42);
 }
 
 .hint,
 .small-text,
 .field-hint {
-  color: #909399;
+  color: #8b7f72;
   font-size: 12px;
 }
 
@@ -1477,10 +1674,10 @@ function formatDate(value) {
 .upload-item--stacked {
   align-items: stretch;
   flex-direction: column;
-  padding: 10px 12px;
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  background: #fafafa;
+  padding: 14px 16px;
+  border: 1px solid rgba(69, 54, 42, 0.08);
+  border-radius: 20px;
+  background: rgba(237, 226, 210, 0.24);
 }
 
 .upload-item-main,
@@ -1521,5 +1718,47 @@ function formatDate(value) {
 
 .drawer-subtitle {
   margin: 20px 0 12px;
+  color: #2b241d;
+}
+
+.rename-item {
+  padding: 10px 0;
+}
+
+:deep(.el-empty) {
+  padding: 24px 0;
+}
+
+:deep(.el-drawer__header span),
+:deep(.el-dialog__title) {
+  font-family: Iowan Old Style, Palatino Linotype, Book Antiqua, Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #201912;
+}
+
+:deep(.el-form-item__label) {
+  color: #6f6256;
+}
+
+:deep(.el-table .cell) {
+  line-height: 1.45;
+}
+
+:deep(.el-progress-bar__inner) {
+  background: linear-gradient(90deg, #201912, #5d4836);
+}
+
+:deep(.el-tag--success),
+:deep(.el-tag--primary),
+:deep(.el-tag--warning),
+:deep(.el-tag--danger),
+:deep(.el-tag--info) {
+  border: none;
+}
+
+:deep(.el-drawer__body) {
+  padding-top: 12px;
 }
 </style>

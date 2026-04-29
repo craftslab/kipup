@@ -1,9 +1,13 @@
 <template>
   <div class="upload-page">
     <div class="upload-card">
+      <div class="upload-shell-copy">
+        <p class="upload-shell-eyebrow">Kipup upload portal</p>
+        <h1 class="upload-shell-title">Drop in a file and ship it with confidence.</h1>
+      </div>
       <div class="upload-card-header">
-        <el-icon :size="28" color="#409eff"><UploadFilled /></el-icon>
-        <span class="upload-card-title">File Upload</span>
+        <el-icon :size="28" color="#201912"><UploadFilled /></el-icon>
+        <span class="upload-card-title">File upload</span>
       </div>
 
       <p v-if="targetFilename" class="upload-hint">
@@ -20,7 +24,7 @@
           @drop.prevent="onDrop"
           @click="triggerFileInput"
         >
-          <el-icon :size="48" color="#409eff"><UploadFilled /></el-icon>
+          <el-icon :size="48" color="#201912"><UploadFilled /></el-icon>
           <p>Drop a file here or <strong>click</strong> to select</p>
         </div>
         <input ref="fileInputRef" type="file" style="display:none" @change="onFileChange" />
@@ -54,7 +58,7 @@
       <!-- Success state -->
       <div v-if="done" class="result result--success">
         <el-icon :size="48" color="#67c23a"><CircleCheck /></el-icon>
-        <p>File uploaded successfully!</p>
+        <p>File uploaded successfully.</p>
       </div>
 
       <!-- Expired / invalid link state -->
@@ -179,54 +183,84 @@ function formatSize(bytes) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  padding: 24px;
+  background:
+    radial-gradient(circle at top, rgba(237, 226, 210, 0.82), transparent 42%),
+    #f4efe6;
+  padding: 32px;
   box-sizing: border-box;
 }
 
 .upload-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  padding: 40px 48px;
+  background: rgba(255, 252, 245, 0.88);
+  border: 1px solid rgba(69, 54, 42, 0.12);
+  border-radius: 30px;
+  box-shadow: 0 24px 80px rgba(59, 43, 31, 0.08);
+  padding: 44px 48px;
   width: 100%;
-  max-width: 520px;
+  max-width: 620px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 22px;
+}
+
+.upload-shell-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upload-shell-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8b7f72;
+}
+
+.upload-shell-title {
+  margin: 0;
+  font-family: Iowan Old Style, Palatino Linotype, Book Antiqua, Georgia, serif;
+  font-size: 38px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+  color: #201912;
 }
 
 .upload-card-header {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding-top: 6px;
 }
 
 .upload-card-title {
   font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: #201912;
 }
 
 .upload-hint {
   margin: 0;
   font-size: 14px;
-  color: #606266;
+  color: #5c5146;
 }
 
 .drop-zone {
-  border: 2px dashed #c0c4cc;
-  border-radius: 8px;
-  padding: 36px 24px;
+  border: 1px dashed rgba(69, 54, 42, 0.22);
+  border-radius: 24px;
+  padding: 42px 24px;
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
+  background: rgba(237, 226, 210, 0.24);
+  transition: 0.2s ease;
 }
 
 .drop-zone:hover,
 .drop-zone--over {
-  border-color: #409eff;
-  background: #ecf5ff;
+  border-color: rgba(32, 25, 18, 0.28);
+  background: rgba(237, 226, 210, 0.46);
 }
 
 .drop-zone--disabled {
@@ -236,8 +270,8 @@ function formatSize(bytes) {
 
 .drop-zone p {
   margin: 8px 0 0;
-  color: #606266;
-  font-size: 14px;
+  color: #5c5146;
+  font-size: 15px;
 }
 
 .file-info {
@@ -245,10 +279,11 @@ function formatSize(bytes) {
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  color: #303133;
-  padding: 8px 12px;
-  background: #f5f7fa;
-  border-radius: 6px;
+  color: #201912;
+  padding: 12px 14px;
+  background: rgba(237, 226, 210, 0.28);
+  border: 1px solid rgba(69, 54, 42, 0.08);
+  border-radius: 18px;
 }
 
 .file-name {
@@ -259,12 +294,12 @@ function formatSize(bytes) {
 }
 
 .file-size {
-  color: #909399;
+  color: #8b7f72;
   flex-shrink: 0;
 }
 
 .progress-bar {
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .upload-btn {
@@ -283,12 +318,16 @@ function formatSize(bytes) {
   margin: 0;
   font-size: 15px;
   font-weight: 500;
-  color: #303133;
+  color: #201912;
 }
 
 .error-msg {
   margin: 0;
   font-size: 13px;
   color: #f56c6c;
+}
+
+:deep(.el-progress-bar__inner) {
+  background: linear-gradient(90deg, #201912, #5d4836);
 }
 </style>
