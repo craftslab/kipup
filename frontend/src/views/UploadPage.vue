@@ -154,7 +154,7 @@ function uploadWithProgress(url, file, filename) {
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve()
       } else {
-        const err = new Error(`Upload failed: HTTP ${xhr.status} / 上传失败：HTTP ${xhr.status}`)
+        const err = new Error(`Upload failed (HTTP ${xhr.status}) / 上传失败 (HTTP ${xhr.status})`)
         err.status = xhr.status
         reject(err)
       }

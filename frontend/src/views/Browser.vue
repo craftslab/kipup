@@ -328,7 +328,7 @@
         <el-table-column label="Progress / 进度" min-width="220">
           <template #default="{ row }">
             <el-progress :percentage="taskProgress(row)" :status="row.status === 'failed' ? 'exception' : row.status === 'completed' ? 'success' : undefined" />
-            <div class="small-text">{{ row.completedItems }}/{{ row.totalItems }} · {{ row.currentKey || row.message || pendingStatusLabel }}</div>
+            <div class="small-text">{{ row.completedItems }}/{{ row.totalItems }} · {{ taskMessage(row) }}</div>
           </template>
         </el-table-column>
         <el-table-column prop="status" label="Status / 状态" width="110" />
@@ -563,7 +563,7 @@ const workspaceCopy = {
       eyebrow: 'Active bucket / 当前 Bucket',
       title: bucket,
       subtitle: `A calmer place to browse ${bucket}. / 以更有秩序的方式管理 ${bucket}。`,
-      description: `Manage ${bucket} from one warm, focused surface${prefix ? ` — ${prefix}` : '.'} / 在一个更专注的界面中完成浏览、上传、清理与分享。`
+      description: `Manage ${bucket} from one warm, focused surface${prefix ? ` — ${prefix}` : '.'} / 在一个更专注的界面中完成 ${bucket}${prefix ? ` — ${prefix}` : ''} 的浏览、上传、清理与分享。`
     }
   }
 }
@@ -1349,6 +1349,17 @@ function normalizePrefix(prefix) {
 function createTaskId(prefix) {
   if (window.crypto?.randomUUID) return `${prefix}-${window.crypto.randomUUID()}`
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function taskMessage(row) {
+  if (row.currentKey) return row.currentKey
+  if (row.message) return ensureBilingualText(row.message, '状态更新')
+  return pendingStatusLabel
+}
+
+function ensureBilingualText(text, fallbackChinese) {
+  if (!text) return ''
+  return text.includes(' / ') ? text : `${text} / ${fallbackChinese}`
 }
 
 function formatSize(bytes) {
