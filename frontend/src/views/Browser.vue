@@ -1135,18 +1135,20 @@ async function generateDownloadLinkAction() {
   generatingDownloadLink.value = true
   try {
     const key = downloadLinkTarget.value.key
-    let downloadData
-    let uploadData
+    let downloadResponse
     try {
-      ;({ data: downloadData } = await generateDownloadLink(currentBucket.value, key, downloadLinkExpiry.value))
+      downloadResponse = await generateDownloadLink(currentBucket.value, key, downloadLinkExpiry.value)
     } catch (error) {
       throw new Error(`Failed to generate download access / 下载访问生成失败：${error.response?.data?.error || error.message}`)
     }
+    const downloadData = downloadResponse.data
+    let uploadResponse
     try {
-      ;({ data: uploadData } = await generateUploadLink(currentBucket.value, key, downloadLinkExpiry.value))
+      uploadResponse = await generateUploadLink(currentBucket.value, key, downloadLinkExpiry.value)
     } catch (error) {
       throw new Error(`Failed to generate upload access / 上传访问生成失败：${error.response?.data?.error || error.message}`)
     }
+    const uploadData = uploadResponse.data
     const filename = key.split('/').pop() || key
     const params = new URLSearchParams({
       url: uploadData.url,
