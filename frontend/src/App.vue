@@ -73,10 +73,6 @@ body,
   color: var(--kip-text);
 }
 
-body {
-  min-width: 1180px;
-}
-
 .app-header {
   display: flex;
   align-items: flex-end;

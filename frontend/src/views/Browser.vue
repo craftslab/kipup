@@ -133,7 +133,7 @@
           :data="objects"
           class="objects-table"
           style="width: 100%"
-          height="calc(100vh - 360px)"
+          height="calc(100vh - var(--objects-table-offset))"
           empty-text="No objects – select a bucket or upload files"
           @selection-change="onSelectionChange"
         >
@@ -1345,6 +1345,7 @@ function formatDate(value) {
 
 <style scoped>
 .browser-layout {
+  --objects-table-offset: 360px;
   display: flex;
   gap: 20px;
   height: calc(100vh - 162px);
