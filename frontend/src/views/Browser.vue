@@ -127,52 +127,54 @@
           </div>
         </div>
 
-        <el-table
-          v-loading="loading"
-          :data="objects"
-          class="objects-table"
-          style="width: 100%"
-          height="calc(100vh - var(--objects-table-offset))"
-          empty-text="No objects — select a bucket or upload files / 暂无对象，请先选择 Bucket 或上传文件"
-          @selection-change="onSelectionChange"
-        >
-          <el-table-column type="selection" width="44" />
-          <el-table-column label="Name / 名称" min-width="320" show-overflow-tooltip>
-            <template #default="{ row }">
-              <div class="file-row" @click="handleRowClick(row)">
-                <el-icon class="file-icon" :color="row.isDir ? '#ad7f45' : '#7d7063'">
-                  <Folder v-if="row.isDir" />
-                  <Document v-else />
-                </el-icon>
-                <span :class="row.isDir ? 'folder-name' : ''">{{ row.name }}</span>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="Size / 体积" width="120" align="right">
-            <template #default="{ row }">
-              <span v-if="!row.isDir">{{ formatSize(row.size) }}</span>
-              <span v-else style="color:#b8aa99">—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="Last Modified / 修改时间" width="190">
-            <template #default="{ row }">
-              <span v-if="!row.isDir">{{ formatDate(row.lastModified) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="Actions / 操作" width="270" fixed="right">
-            <template #default="{ row }">
-              <el-button v-if="!row.isDir" type="primary" :icon="Download" size="small" @click.stop="downloadFile(row)">
-                Download / 下载
-              </el-button>
-              <el-button v-if="!row.isDir" :icon="Share" size="small" @click.stop="openDownloadLinkDialog(row)">
-                Copy Link / 复制链接
-              </el-button>
-              <el-button type="danger" :icon="Delete" size="small" plain @click.stop="confirmDeleteObject(row)">
-                Delete / 删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="objects-table-wrap">
+          <el-table
+            v-loading="loading"
+            :data="objects"
+            class="objects-table"
+            style="width: 100%"
+            height="100%"
+            empty-text="No objects — select a bucket or upload files / 暂无对象，请先选择 Bucket 或上传文件"
+            @selection-change="onSelectionChange"
+          >
+            <el-table-column type="selection" width="44" />
+            <el-table-column label="Name / 名称" min-width="320" show-overflow-tooltip>
+              <template #default="{ row }">
+                <div class="file-row" @click="handleRowClick(row)">
+                  <el-icon class="file-icon" :color="row.isDir ? '#ad7f45' : '#7d7063'">
+                    <Folder v-if="row.isDir" />
+                    <Document v-else />
+                  </el-icon>
+                  <span :class="row.isDir ? 'folder-name' : ''">{{ row.name }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="Size / 体积" width="120" align="right">
+              <template #default="{ row }">
+                <span v-if="!row.isDir">{{ formatSize(row.size) }}</span>
+                <span v-else style="color:#b8aa99">—</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="Last Modified / 修改时间" width="190">
+              <template #default="{ row }">
+                <span v-if="!row.isDir">{{ formatDate(row.lastModified) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="Actions / 操作" width="270" fixed="right">
+              <template #default="{ row }">
+                <el-button v-if="!row.isDir" type="primary" :icon="Download" size="small" @click.stop="downloadFile(row)">
+                  Download / 下载
+                </el-button>
+                <el-button v-if="!row.isDir" :icon="Share" size="small" @click.stop="openDownloadLinkDialog(row)">
+                  Copy Link / 复制链接
+                </el-button>
+                <el-button type="danger" :icon="Delete" size="small" plain @click.stop="confirmDeleteObject(row)">
+                  Delete / 删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
       </section>
     </div>
 
@@ -1352,7 +1354,6 @@ function formatDate(value) {
 
 <style scoped>
 .browser-layout {
-  --objects-table-offset: 360px;
   display: flex;
   gap: 24px;
   height: calc(100vh - 162px);
@@ -1558,6 +1559,7 @@ function formatDate(value) {
 .workspace-panel {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
   background: rgba(255, 252, 245, 0.82);
@@ -1620,8 +1622,13 @@ function formatDate(value) {
 }
 
 .objects-table {
+  width: 100%;
+}
+
+.objects-table-wrap {
+  flex: 1;
+  min-height: 0;
   margin: 0 22px 22px;
-  width: calc(100% - 44px);
 }
 
 .file-row {
