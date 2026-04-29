@@ -14,7 +14,7 @@
 - 🗑️ 删除单个文件或整个文件夹（递归）
 - 🧰 批量下载、移动、重命名和删除文件/文件夹
 - 🔎 按名称、大小、前缀和修改时间搜索对象
-- 🧾 内置任务中心、操作历史、清理策略和 Webhook 投递日志
+- 🧾 内置任务中心、操作历史、清理策略和 Webhook
 - 🐳 一条命令完成 **Docker Compose** 部署（MinIO + backend + frontend）
 
 ## 架构
@@ -36,7 +36,7 @@
 git clone https://github.com/craftslab/s3c.git
 cd s3c
 
-# 2. （可选）自定义凭证
+# 2.（可选）自定义凭证
 cp .env.example .env
 $EDITOR .env
 
