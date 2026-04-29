@@ -25,7 +25,7 @@
         <el-empty v-if="!buckets.length" description="No buckets" :image-size="60" />
       </el-scrollbar>
       <div class="sidebar-footer">
-        <span>{{ buckets.length }} workspace{{ buckets.length === 1 ? '' : 's' }}</span>
+        <span>{{ buckets.length }} bucket{{ buckets.length === 1 ? '' : 's' }}</span>
       </div>
     </aside>
 
