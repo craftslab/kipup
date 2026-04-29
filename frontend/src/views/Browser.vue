@@ -1140,14 +1140,10 @@ async function generateDownloadLinkAction() {
       generateUploadLink(currentBucket.value, key, downloadLinkExpiry.value)
     ])
     if (downloadResult.status === 'rejected') {
-      throw new Error(
-        `Failed to generate download access / 下载访问生成失败：${downloadResult.reason?.response?.data?.error || downloadResult.reason?.message || 'unknown error'}`
-      )
+      throw new Error('Failed to create shared link / 共享链接创建失败')
     }
     if (uploadResult.status === 'rejected') {
-      throw new Error(
-        `Failed to generate upload access / 上传访问生成失败：${uploadResult.reason?.response?.data?.error || uploadResult.reason?.message || 'unknown error'}`
-      )
+      throw new Error('Failed to create shared link / 共享链接创建失败')
     }
     const downloadData = downloadResult.value.data
     const uploadData = uploadResult.value.data

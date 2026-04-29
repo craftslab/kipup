@@ -102,9 +102,9 @@ const fileInputRef = ref(null)
 const canUpload = computed(() => Boolean(presignedUrl.value))
 const canDownload = computed(() => Boolean(downloadUrl.value))
 const heroTitle = computed(() => {
-  if (canUpload.value && canDownload.value) return 'Download the current file or upload a new one / 下载当前文件或上传新文件'
-  if (canDownload.value) return 'Download the current file from this shared link / 通过此共享链接下载当前文件'
-  return 'Upload a file from this shared link / 通过此共享链接上传文件'
+  if (canUpload.value && canDownload.value) return 'Download or upload a file / 下载或上传文件'
+  if (canDownload.value) return 'Download a file / 下载文件'
+  return 'Upload a file / 上传文件'
 })
 const heroSubtitle = computed(() => {
   if (canUpload.value && canDownload.value) return 'One shared page for both directions, with the same link expiry window. / 同一个共享页面，同时支持下载与上传，并沿用相同的链接有效期。'
@@ -127,7 +127,10 @@ onMounted(() => {
 })
 
 function downloadFile() {
-  if (!downloadUrl.value) return
+  if (!downloadUrl.value) {
+    errorMsg.value = 'Download link is unavailable. / 下载链接不可用。'
+    return
+  }
   window.open(downloadUrl.value, '_blank', 'noopener,noreferrer')
 }
 
