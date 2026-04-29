@@ -2,20 +2,26 @@
   <div class="upload-page">
     <div class="upload-card">
       <div class="upload-shell-copy">
-        <p class="upload-shell-eyebrow">Kipup upload portal / Kipup 上传入口</p>
-        <h1 class="upload-shell-title">Drop in a file and ship it with confidence.</h1>
-        <p class="upload-shell-subtitle">A quieter upload flow, with calmer copy in both English and Chinese. / 用更统一的中英文文案，完成一次更从容的上传。</p>
+        <p class="upload-shell-eyebrow">Kipup shared file portal / Kipup 文件共享入口</p>
+        <h1 class="upload-shell-title">{{ heroTitle }}</h1>
+        <p class="upload-shell-subtitle">{{ heroSubtitle }}</p>
       </div>
       <div class="upload-card-header">
         <el-icon :size="28" color="#201912"><UploadFilled /></el-icon>
-        <span class="upload-card-title">File upload / 文件上传</span>
+        <span class="upload-card-title">{{ cardTitle }}</span>
       </div>
 
       <p v-if="targetFilename" class="upload-hint">
-        Upload destination / 上传目标：<strong>{{ targetFilename }}</strong>
+        Shared file / 共享文件：<strong>{{ targetFilename }}</strong>
       </p>
 
-      <template v-if="!done && !expired">
+      <div v-if="canDownload && !expired" class="download-actions">
+        <el-button class="download-btn" @click="downloadFile">
+          Download current file / 下载当前文件
+        </el-button>
+      </div>
+
+      <template v-if="canUpload && !done && !expired">
         <!-- Drop zone -->
         <div
           class="drop-zone"
@@ -65,7 +71,7 @@
       <!-- Expired / invalid link state -->
       <div v-if="expired" class="result result--error">
         <el-icon :size="48" color="#f56c6c"><CircleClose /></el-icon>
-        <p>This upload link is invalid or has expired. / 上传链接无效或已过期。</p>
+        <p>This shared link is invalid or has expired. / 共享链接无效或已过期。</p>
       </div>
 
       <!-- Error message -->
@@ -75,13 +81,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { UploadFilled, Document, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 
 const route = useRoute()
 
 const presignedUrl = ref('')
+const downloadUrl = ref('')
 const targetFilename = ref('')
 
 const selectedFile = ref(null)
@@ -92,14 +99,47 @@ const done = ref(false)
 const expired = ref(false)
 const errorMsg = ref('')
 const fileInputRef = ref(null)
+const canUpload = computed(() => Boolean(presignedUrl.value))
+const canDownload = computed(() => Boolean(downloadUrl.value))
+const heroTitle = computed(() => {
+  if (canUpload.value && canDownload.value) return 'Download or upload a file / 下载或上传文件'
+  if (canDownload.value) return 'Download a file / 下载文件'
+  return 'Upload a file / 上传文件'
+})
+const heroSubtitle = computed(() => {
+  if (canUpload.value && canDownload.value) return 'One shared page for both directions, with the same link expiry window. / 同一个共享页面，同时支持下载与上传，并沿用相同的链接有效期。'
+  if (canDownload.value) return 'This shared page is ready for downloading within the link expiry window. / 该共享页面可在链接有效期内用于下载。'
+  return 'This shared page is ready for uploading within the link expiry window. / 该共享页面可在链接有效期内用于上传。'
+})
+const cardTitle = computed(() => {
+  if (canUpload.value && canDownload.value) return 'File download & upload / 文件下载与上传'
+  if (canDownload.value) return 'File download / 文件下载'
+  return 'File upload / 文件上传'
+})
 
 onMounted(() => {
   presignedUrl.value = route.query.url || ''
+  downloadUrl.value = route.query.downloadUrl || ''
   targetFilename.value = route.query.filename || ''
-  if (!presignedUrl.value) {
+  if (!presignedUrl.value && !downloadUrl.value) {
     expired.value = true
   }
 })
+
+function downloadFile() {
+  if (!downloadUrl.value) {
+    errorMsg.value = 'Download link is unavailable. / 下载链接不可用。'
+    return
+  }
+  const link = document.createElement('a')
+  link.href = downloadUrl.value
+  link.target = '_blank'
+  link.rel = 'noopener noreferrer'
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
 
 function triggerFileInput() {
   if (!uploading.value) fileInputRef.value?.click()
@@ -254,6 +294,14 @@ function formatSize(bytes) {
   margin: 0;
   font-size: 14px;
   color: #5c5146;
+}
+
+.download-actions {
+  display: flex;
+}
+
+.download-btn {
+  min-width: 220px;
 }
 
 .drop-zone {

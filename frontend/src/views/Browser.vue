@@ -1134,10 +1134,32 @@ async function generateDownloadLinkAction() {
   if (!downloadLinkTarget.value) return
   generatingDownloadLink.value = true
   try {
-    const { data } = await generateDownloadLink(currentBucket.value, downloadLinkTarget.value.key, downloadLinkExpiry.value)
-    downloadLinkUrl.value = data.url
+    const key = downloadLinkTarget.value.key
+    const [downloadResult, uploadResult] = await Promise.allSettled([
+      generateDownloadLink(currentBucket.value, key, downloadLinkExpiry.value),
+      generateUploadLink(currentBucket.value, key, downloadLinkExpiry.value)
+    ])
+    if (downloadResult.status === 'rejected') {
+      throw new Error(
+        `Failed to create download link / 下载链接创建失败：${downloadResult.reason?.response?.data?.error || downloadResult.reason?.message || 'unknown error'}`
+      )
+    }
+    if (uploadResult.status === 'rejected') {
+      throw new Error(
+        `Failed to create upload link / 上传链接创建失败：${uploadResult.reason?.response?.data?.error || uploadResult.reason?.message || 'unknown error'}`
+      )
+    }
+    const downloadData = downloadResult.value.data
+    const uploadData = uploadResult.value.data
+    const filename = key.split('/').pop() || key
+    const params = new URLSearchParams({
+      url: uploadData.url,
+      downloadUrl: downloadData.url,
+      filename
+    })
+    downloadLinkUrl.value = `${window.location.origin}/upload?${params.toString()}`
   } catch (error) {
-    ElMessage.error('Failed to generate link / 生成链接失败：' + (error.response?.data?.error || error.message))
+    ElMessage.error(error.message || 'Failed to generate link / 生成链接失败')
   } finally {
     generatingDownloadLink.value = false
   }
