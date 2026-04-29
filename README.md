@@ -1,5 +1,7 @@
 # s3c – S3 Cloud Browser
 
+[English](README.md) | [中文](README_cn.md)
+
 A lightweight **Go + Vue 3** web application for browsing, uploading and downloading files stored in any S3-compatible object store (MinIO, AWS S3, etc.).
 
 ## Features
