@@ -219,7 +219,7 @@
           <el-progress :percentage="fileProgress(f)" :status="f.status === 'error' ? 'exception' : f.status === 'done' ? 'success' : undefined" />
           <div class="small-text upload-item-detail">
             <span>{{ formatSize(f.uploadedBytes) }} / {{ formatSize(f.size) }}</span>
-            <span v-if="f.error">{{ extractEnglishPortion(f.error) }}</span>
+            <span v-if="f.error">{{ extractTextBeforeSeparator(f.error) }}</span>
           </div>
         </div>
       </div>
@@ -1375,11 +1375,11 @@ function createTaskId(prefix) {
 
 function taskMessage(row) {
   if (row.currentKey) return row.currentKey
-  if (row.message) return extractEnglishPortion(row.message)
+  if (row.message) return extractTextBeforeSeparator(row.message)
   return PENDING_STATUS_LABEL
 }
 
-function extractEnglishPortion(text) {
+function extractTextBeforeSeparator(text) {
   if (!text) return ''
   const separatorIndex = text.indexOf(' / ')
   return separatorIndex === -1 ? text : text.slice(0, separatorIndex)
