@@ -1135,20 +1135,22 @@ async function generateDownloadLinkAction() {
   generatingDownloadLink.value = true
   try {
     const key = downloadLinkTarget.value.key
-    let downloadResponse
-    try {
-      downloadResponse = await generateDownloadLink(currentBucket.value, key, downloadLinkExpiry.value)
-    } catch (error) {
-      throw new Error(`Failed to generate download access / 下载访问生成失败：${error?.response?.data?.error || error.message}`)
+    const [downloadResult, uploadResult] = await Promise.allSettled([
+      generateDownloadLink(currentBucket.value, key, downloadLinkExpiry.value),
+      generateUploadLink(currentBucket.value, key, downloadLinkExpiry.value)
+    ])
+    if (downloadResult.status === 'rejected') {
+      throw new Error(
+        `Failed to generate download access / 下载访问生成失败：${downloadResult.reason?.response?.data?.error || downloadResult.reason?.message || 'unknown error'}`
+      )
     }
-    const downloadData = downloadResponse.data
-    let uploadResponse
-    try {
-      uploadResponse = await generateUploadLink(currentBucket.value, key, downloadLinkExpiry.value)
-    } catch (error) {
-      throw new Error(`Failed to generate upload access / 上传访问生成失败：${error?.response?.data?.error || error.message}`)
+    if (uploadResult.status === 'rejected') {
+      throw new Error(
+        `Failed to generate upload access / 上传访问生成失败：${uploadResult.reason?.response?.data?.error || uploadResult.reason?.message || 'unknown error'}`
+      )
     }
-    const uploadData = uploadResponse.data
+    const downloadData = downloadResult.value.data
+    const uploadData = uploadResult.value.data
     const filename = key.split('/').pop() || key
     const params = new URLSearchParams({
       url: uploadData.url,
