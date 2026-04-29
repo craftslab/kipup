@@ -566,7 +566,7 @@ const uploadStats = computed(() => {
   const loadedBytes = uploadFiles.value.reduce((sum, item) => sum + Math.min(item.uploadedBytes || 0, item.size || 0), 0)
   return { total, completed, failed, totalBytes, loadedBytes }
 })
-const workspaceEyebrow = computed(() => (currentBucket.value ? 'Active bucket / 当前 Bucket' : 'Anthropic-inspired workspace / 更安静的存储界面'))
+const workspaceEyebrow = computed(() => (currentBucket.value ? 'Active bucket / 当前 Bucket' : 'Storage workspace / 存储工作台'))
 const workspaceTitle = computed(() => (currentBucket.value ? currentBucket.value : 'Select a bucket to start curating storage / 选择一个 Bucket 开始整理存储'))
 const workspaceSubtitle = computed(() => (currentBucket.value
   ? `A calmer place to browse ${currentBucket.value}. / 以更有秩序的方式管理 ${currentBucket.value}。`
