@@ -2,16 +2,17 @@
   <div class="upload-page">
     <div class="upload-card">
       <div class="upload-shell-copy">
-        <p class="upload-shell-eyebrow">Kipup upload portal</p>
+        <p class="upload-shell-eyebrow">Kipup upload portal / Kipup 上传入口</p>
         <h1 class="upload-shell-title">Drop in a file and ship it with confidence.</h1>
+        <p class="upload-shell-subtitle">A quieter upload flow, with calmer copy in both English and Chinese. / 用更统一的中英文文案，完成一次更从容的上传。</p>
       </div>
       <div class="upload-card-header">
         <el-icon :size="28" color="#201912"><UploadFilled /></el-icon>
-        <span class="upload-card-title">File upload</span>
+        <span class="upload-card-title">File upload / 文件上传</span>
       </div>
 
       <p v-if="targetFilename" class="upload-hint">
-        Upload destination: <strong>{{ targetFilename }}</strong>
+        Upload destination / 上传目标：<strong>{{ targetFilename }}</strong>
       </p>
 
       <template v-if="!done && !expired">
@@ -25,7 +26,7 @@
           @click="triggerFileInput"
         >
           <el-icon :size="48" color="#201912"><UploadFilled /></el-icon>
-          <p>Drop a file here or <strong>click</strong> to select</p>
+          <p>Drop a file here or <strong>click</strong> to select / 拖拽文件到这里，或点击选择</p>
         </div>
         <input ref="fileInputRef" type="file" style="display:none" @change="onFileChange" />
 
@@ -51,20 +52,20 @@
           class="upload-btn"
           @click="startUpload"
         >
-          Upload
+          Upload / 上传
         </el-button>
       </template>
 
       <!-- Success state -->
       <div v-if="done" class="result result--success">
         <el-icon :size="48" color="#67c23a"><CircleCheck /></el-icon>
-        <p>File uploaded successfully.</p>
+        <p>File uploaded successfully. / 文件上传成功。</p>
       </div>
 
       <!-- Expired / invalid link state -->
       <div v-if="expired" class="result result--error">
         <el-icon :size="48" color="#f56c6c"><CircleClose /></el-icon>
-        <p>This upload link is invalid or has expired.</p>
+        <p>This upload link is invalid or has expired. / 上传链接无效或已过期。</p>
       </div>
 
       <!-- Error message -->
@@ -130,7 +131,7 @@ async function startUpload() {
     if (e.status === 403 || e.status === 401) {
       expired.value = true
     } else {
-      errorMsg.value = e.message || 'Upload failed. The link may have expired.'
+      errorMsg.value = e.message || 'Upload failed. The link may have expired. / 上传失败，链接可能已过期。'
     }
   } finally {
     uploading.value = false
@@ -153,12 +154,12 @@ function uploadWithProgress(url, file, filename) {
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve()
       } else {
-        const err = new Error(`Upload failed: HTTP ${xhr.status}`)
+        const err = new Error(`Upload failed: HTTP ${xhr.status} / 上传失败：HTTP ${xhr.status}`)
         err.status = xhr.status
         reject(err)
       }
     }
-    xhr.onerror = () => reject(new Error('Network error during upload'))
+    xhr.onerror = () => reject(new Error('Network error during upload / 上传过程中网络异常'))
     if (file.type) xhr.setRequestHeader('Content-Type', file.type)
     xhr.send(file)
   })
@@ -195,12 +196,12 @@ function formatSize(bytes) {
   border: 1px solid rgba(69, 54, 42, 0.12);
   border-radius: 30px;
   box-shadow: 0 24px 80px rgba(59, 43, 31, 0.08);
-  padding: 44px 48px;
+  padding: 48px 52px;
   width: 100%;
-  max-width: 620px;
+  max-width: 660px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 24px;
 }
 
 .upload-shell-copy {
@@ -221,18 +222,26 @@ function formatSize(bytes) {
 .upload-shell-title {
   margin: 0;
   font-family: Iowan Old Style, Palatino Linotype, Book Antiqua, Georgia, serif;
-  font-size: 38px;
+  font-size: 42px;
   font-weight: 600;
   letter-spacing: -0.04em;
-  line-height: 1.02;
+  line-height: 0.98;
   color: #201912;
+}
+
+.upload-shell-subtitle {
+  max-width: 520px;
+  margin: 2px 0 0;
+  color: #6f6256;
+  font-size: 16px;
+  line-height: 1.7;
 }
 
 .upload-card-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-top: 6px;
+  padding-top: 10px;
 }
 
 .upload-card-title {

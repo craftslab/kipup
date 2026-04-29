@@ -9,14 +9,16 @@
           <div class="brand-mark">
             <el-icon :size="20"><Files /></el-icon>
           </div>
-          <div>
-            <p class="brand-eyebrow">Kipup workspace</p>
-            <h1 class="brand-title">S3 storage, shaped for calm operations.</h1>
+          <div class="brand-copy">
+            <p class="brand-eyebrow">Kipup workspace / Kipup 存储工作台</p>
+            <h1 class="brand-title">S3 storage, shaped with calmer typography and steadier rhythm.</h1>
+            <p class="brand-subtitle">让 S3 管理更安静，也让浏览、协作与分享更有秩序。</p>
           </div>
         </div>
-        <p class="brand-meta">
-          Browse buckets, move files, and share uploads from one quiet control surface.
-        </p>
+        <div class="brand-meta">
+          <p>Browse buckets, move files, and share uploads from one quiet control surface.</p>
+          <p>在一个更克制的界面里完成 Bucket 浏览、文件流转与上传分享。</p>
+        </div>
       </header>
       <main class="app-main">
         <router-view />
@@ -77,21 +79,23 @@ body,
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 24px;
-  padding: 36px 0 28px;
+  gap: 36px;
+  padding: 42px 0 30px;
   border-bottom: 1px solid var(--kip-border);
 }
 
 .app-shell {
   min-height: 100vh;
-  padding: 0 28px 28px;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 0 28px 36px;
   box-sizing: border-box;
 }
 
 .brand-lockup {
   display: flex;
-  align-items: center;
-  gap: 18px;
+  align-items: flex-start;
+  gap: 20px;
 }
 
 .brand-mark {
@@ -107,7 +111,8 @@ body,
 }
 
 .brand-eyebrow,
-.brand-meta {
+.brand-meta p,
+.brand-subtitle {
   margin: 0;
   color: var(--kip-text-muted);
 }
@@ -123,16 +128,26 @@ body,
 .brand-title {
   margin: 0;
   font-family: Iowan Old Style, Palatino Linotype, Book Antiqua, Georgia, serif;
-  font-size: 34px;
+  max-width: 780px;
+  font-size: 42px;
   font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+}
+
+.brand-subtitle {
+  margin-top: 12px;
+  font-size: 16px;
+  line-height: 1.7;
 }
 
 .brand-meta {
   max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 .app-main {
