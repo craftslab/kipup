@@ -101,7 +101,11 @@ const uploadProxyPath = '/api/upload'
 const pageTitle = computed(() => (downloadUrl.value ? 'Shared File' : 'File Upload'))
 const targetLabel = computed(() => (downloadUrl.value ? 'Shared file' : 'Upload destination'))
 const linkStatusMessage = computed(() => (
-  invalidLink.value ? 'This link is missing required parameters.' : 'This shared link is invalid or has expired.'
+  invalidLink.value
+    ? 'This link is missing required parameters.'
+    : downloadUrl.value
+      ? 'This shared link is invalid or has expired.'
+      : 'This upload link is invalid or has expired.'
 ))
 
 onMounted(() => {
