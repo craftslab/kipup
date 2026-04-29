@@ -3,35 +3,29 @@ import axios from 'axios'
 const api = axios.create({ baseURL: '/api/v1' })
 
 export const listBuckets = () => api.get('/buckets')
-
-export const createBucket = (name, region = 'us-east-1') =>
-  api.post('/buckets', { name, region })
-
-export const deleteBucket = (bucket) => api.delete(`/buckets/${bucket}`)
+export const createBucket = (name, region = 'us-east-1') => api.post('/buckets', { name, region })
+export const deleteBucket = (bucket) => api.delete(`/buckets/${encodeURIComponent(bucket)}`)
 
 export const listObjects = (bucket, prefix = '') =>
   api.get(`/objects/${encodeURIComponent(bucket)}`, { params: { prefix } })
 
-/**
- * Returns the URL that triggers a streaming download.
- * Using a plain anchor href lets the browser stream the file
- * without loading it into JS memory.
- */
+export const searchObjects = (bucket, filters = {}) =>
+  api.get(`/search/${encodeURIComponent(bucket)}`, { params: filters })
+
 export const downloadUrl = (bucket, key) =>
   `/api/v1/objects/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`
 
-/**
- * Uploads files with progress reporting.
- * Files are sent as multipart/form-data; the backend streams them to S3.
- */
-export const uploadObjects = (bucket, files, prefix = '', onProgress) => {
+export const uploadObjects = (bucket, files, prefix = '', onProgress, taskId) => {
   const form = new FormData()
   for (const file of files) {
     form.append('file', file)
   }
   return api.post(`/objects/${encodeURIComponent(bucket)}`, form, {
     params: { prefix },
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      ...(taskId ? { 'X-Task-ID': taskId } : {})
+    },
     onUploadProgress: onProgress
   })
 }
@@ -39,19 +33,38 @@ export const uploadObjects = (bucket, files, prefix = '', onProgress) => {
 export const deleteObject = (bucket, key) =>
   api.delete(`/objects/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`)
 
-/**
- * Returns a presigned download URL for a specific object.
- * expirySeconds defaults to 86400 (24 h).
- */
+export const batchDelete = (bucket, keys, taskId) =>
+  api.post(`/operations/${encodeURIComponent(bucket)}/delete`, { keys, taskId })
+
+export const batchMove = (bucket, items, taskId) =>
+  api.post(`/operations/${encodeURIComponent(bucket)}/move`, { items, taskId })
+
+export const batchRename = (bucket, items, taskId) =>
+  api.post(`/operations/${encodeURIComponent(bucket)}/rename`, { items, taskId })
+
+export const batchDownload = (bucket, keys) =>
+  api.post(`/operations/${encodeURIComponent(bucket)}/download`, { keys }, { responseType: 'blob' })
+
+export const listTasks = (params = {}) => api.get('/tasks', { params })
+export const listHistory = (params = {}) => api.get('/history', { params })
+
+export const listCleanupPolicies = () => api.get('/cleanup-policies')
+export const createCleanupPolicy = (payload) => api.post('/cleanup-policies', payload)
+export const updateCleanupPolicy = (id, payload) => api.put(`/cleanup-policies/${encodeURIComponent(id)}`, payload)
+export const deleteCleanupPolicy = (id) => api.delete(`/cleanup-policies/${encodeURIComponent(id)}`)
+export const runCleanupPolicy = (id) => api.post(`/cleanup-policies/${encodeURIComponent(id)}/run`)
+
+export const listWebhooks = () => api.get('/webhooks')
+export const createWebhook = (payload) => api.post('/webhooks', payload)
+export const updateWebhook = (id, payload) => api.put(`/webhooks/${encodeURIComponent(id)}`, payload)
+export const deleteWebhook = (id) => api.delete(`/webhooks/${encodeURIComponent(id)}`)
+export const listWebhookDeliveries = () => api.get('/webhook-deliveries')
+
 export const generateDownloadLink = (bucket, key, expirySeconds = 86400) =>
   api.get(`/presign/download/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`, {
     params: { expiry: expirySeconds }
   })
 
-/**
- * Returns a presigned upload URL for a specific key.
- * expirySeconds defaults to 86400 (24 h).
- */
 export const generateUploadLink = (bucket, key, expirySeconds = 86400) =>
   api.get(`/presign/upload/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`, {
     params: { expiry: expirySeconds }

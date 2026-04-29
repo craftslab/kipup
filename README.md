@@ -10,6 +10,9 @@ A lightweight **Go + Vue 3** web application for browsing, uploading and downloa
 - 🔗 **Presigned URLs** – generate time-limited download or upload links shareable without credentials (configurable expiry, default 24 h, max 7 days)
 - 🪣 Create / delete buckets
 - 🗑️ Delete individual files or entire folders (recursive)
+- 🧰 Batch download, move, rename, and delete for files/folders
+- 🔎 Search objects by name, size, prefix, and modification time
+- 🧾 Built-in task center, operation history, cleanup policies, and webhook delivery log
 - 🐳 One-command **Docker Compose** deployment (MinIO + backend + frontend)
 
 ## Architecture
@@ -89,6 +92,8 @@ npm run dev
 | `S3_SECRET_KEY` | `minioadmin` | S3 secret key |
 | `S3_USE_SSL` | `false` | Use HTTPS for S3 connection |
 | `S3_REGION` | `us-east-1` | S3 region |
+| `DATA_FILE` | `./data/state.json` | JSON file used to persist tasks, history, cleanup policies, and webhooks |
+| `CLEANUP_INTERVAL_SECONDS` | `3600` | Background interval for running enabled cleanup policies |
 
 ## API Reference
 
@@ -101,6 +106,17 @@ npm run dev
 | GET | `/api/v1/objects/:bucket/*key` | Download object (streaming) |
 | POST | `/api/v1/objects/:bucket?prefix=` | Upload files (multipart streaming) |
 | DELETE | `/api/v1/objects/:bucket/*key` | Delete object or folder (recursive) |
+| GET | `/api/v1/search/:bucket` | Search objects by prefix/name/size/time filters |
+| POST | `/api/v1/operations/:bucket/download` | Download selected files/folders as a ZIP |
+| POST | `/api/v1/operations/:bucket/delete` | Batch delete files/folders |
+| POST | `/api/v1/operations/:bucket/move` | Batch move files/folders to a prefix |
+| POST | `/api/v1/operations/:bucket/rename` | Batch rename files/folders |
+| GET | `/api/v1/tasks` | List recent tasks and progress |
+| GET | `/api/v1/history` | List operation history |
+| GET/POST/PUT/DELETE | `/api/v1/cleanup-policies` | Manage cleanup policies |
+| POST | `/api/v1/cleanup-policies/:id/run` | Run a cleanup policy immediately |
+| GET/POST/PUT/DELETE | `/api/v1/webhooks` | Manage webhook subscriptions |
+| GET | `/api/v1/webhook-deliveries` | List recent webhook deliveries |
 | GET | `/api/v1/presign/download/:bucket/*key` | Generate presigned download URL |
 | GET | `/api/v1/presign/upload/:bucket/*key` | Generate presigned upload URL |
 
