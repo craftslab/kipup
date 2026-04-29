@@ -549,7 +549,7 @@ const webhookEvents = [
   'cleanup.completed'
 ]
 const webhookForm = ref({ name: '', url: '', events: ['object.uploaded'], secret: '', enabled: true })
-const pendingStatusLabel = 'pending / 待处理'
+const PENDING_STATUS_LABEL = 'pending / 待处理'
 
 const workspaceCopy = {
   default: {
@@ -1354,12 +1354,16 @@ function createTaskId(prefix) {
 function taskMessage(row) {
   if (row.currentKey) return row.currentKey
   if (row.message) return ensureBilingualText(row.message, '状态更新')
-  return pendingStatusLabel
+  return PENDING_STATUS_LABEL
 }
 
 function ensureBilingualText(text, fallbackChinese) {
   if (!text) return ''
-  return text.includes(' / ') ? text : `${text} / ${fallbackChinese}`
+  const parts = text.split(' / ')
+  if (parts.length >= 2 && /[\u4e00-\u9fff]/.test(parts.slice(1).join(' / '))) {
+    return text
+  }
+  return `${text} / ${fallbackChinese}`
 }
 
 function formatSize(bytes) {

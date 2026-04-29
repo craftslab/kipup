@@ -132,7 +132,7 @@ body,
   font-size: 42px;
   font-weight: 600;
   letter-spacing: -0.04em;
-  line-height: 1.04;
+  line-height: 1.12;
 }
 
 .brand-subtitle {
