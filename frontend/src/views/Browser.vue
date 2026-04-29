@@ -550,6 +550,23 @@ const webhookEvents = [
 ]
 const webhookForm = ref({ name: '', url: '', events: ['object.uploaded'], secret: '', enabled: true })
 
+const workspaceCopy = {
+  default: {
+    eyebrow: 'Storage workspace / 存储工作台',
+    title: 'Select a bucket to start curating storage / 选择一个 Bucket 开始整理存储',
+    subtitle: 'Editorial hierarchy, warm surfaces, and clearer language for every storage task. / 用更像 Anthropic 的排版层次与更统一的中英文文案管理存储。',
+    description: 'Choose a bucket on the left to browse objects, share links, and run cleanup flows without leaving the workspace. / 从左侧选择 Bucket，即可在同一界面中浏览对象、生成链接并执行清理。'
+  },
+  active(bucket, prefix) {
+    return {
+      eyebrow: 'Active bucket / 当前 Bucket',
+      title: bucket,
+      subtitle: `A calmer place to browse ${bucket}. / 以更有秩序的方式管理 ${bucket}。`,
+      description: `Manage ${bucket} from one warm, focused surface${prefix ? ` — ${prefix}` : '.'} / 在一个更专注的界面中完成浏览、上传、清理与分享。`
+    }
+  }
+}
+
 const currentBucket = computed(() => route.params.bucket || '')
 const currentPrefix = computed(() => {
   const match = route.params.pathMatch
@@ -557,6 +574,9 @@ const currentPrefix = computed(() => {
   const raw = Array.isArray(match) ? match.join('/') : match
   return raw ? `${raw}/` : ''
 })
+const workspaceContent = computed(() => (currentBucket.value
+  ? workspaceCopy.active(currentBucket.value, currentPrefix.value)
+  : workspaceCopy.default))
 const prefixParts = computed(() => currentPrefix.value.split('/').filter(Boolean))
 const uploadStats = computed(() => {
   const total = uploadFiles.value.length
@@ -566,14 +586,10 @@ const uploadStats = computed(() => {
   const loadedBytes = uploadFiles.value.reduce((sum, item) => sum + Math.min(item.uploadedBytes || 0, item.size || 0), 0)
   return { total, completed, failed, totalBytes, loadedBytes }
 })
-const workspaceEyebrow = computed(() => (currentBucket.value ? 'Active bucket / 当前 Bucket' : 'Storage workspace / 存储工作台'))
-const workspaceTitle = computed(() => (currentBucket.value ? currentBucket.value : 'Select a bucket to start curating storage / 选择一个 Bucket 开始整理存储'))
-const workspaceSubtitle = computed(() => (currentBucket.value
-  ? `A calmer place to browse ${currentBucket.value}. / 以更有秩序的方式管理 ${currentBucket.value}。`
-  : 'Editorial hierarchy, warm surfaces, and clearer language for every storage task. / 用更像 Anthropic 的排版层次与更统一的中英文文案管理存储。'))
-const workspaceDescription = computed(() => (currentBucket.value
-  ? `Manage ${currentBucket.value} from one warm, focused surface${currentPrefix.value ? ` — ${currentPrefix.value}` : '.'} / 在一个更专注的界面中完成浏览、上传、清理与分享。`
-  : 'Choose a bucket on the left to browse objects, share links, and run cleanup flows without leaving the workspace. / 从左侧选择 Bucket，即可在同一界面中浏览对象、生成链接并执行清理。'))
+const workspaceEyebrow = computed(() => workspaceContent.value.eyebrow)
+const workspaceTitle = computed(() => workspaceContent.value.title)
+const workspaceSubtitle = computed(() => workspaceContent.value.subtitle)
+const workspaceDescription = computed(() => workspaceContent.value.description)
 const visibleFolderCount = computed(() => objects.value.filter((item) => item.isDir).length)
 const visibleFileCount = computed(() => objects.value.filter((item) => !item.isDir).length)
 const visibleObjectBytes = computed(() => objects.value.reduce((sum, item) => sum + (item.isDir ? 0 : item.size || 0), 0))
