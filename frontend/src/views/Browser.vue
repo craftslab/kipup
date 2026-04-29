@@ -1,19 +1,10 @@
 <template>
   <div class="browser-layout">
-    <!-- ===== Sidebar – bucket list ===== -->
     <aside class="sidebar">
       <div class="sidebar-header">
         <span class="sidebar-title">Buckets</span>
-        <el-button
-          circle
-          type="primary"
-          :icon="Plus"
-          size="small"
-          title="Create bucket"
-          @click="openCreateBucket"
-        />
+        <el-button circle type="primary" :icon="Plus" size="small" title="Create bucket" @click="openCreateBucket" />
       </div>
-
       <el-scrollbar class="sidebar-scroll">
         <ul class="bucket-list">
           <li
@@ -31,15 +22,10 @@
       </el-scrollbar>
     </aside>
 
-    <!-- ===== Main content area ===== -->
     <div class="main-area">
-      <!-- Toolbar -->
       <div class="toolbar">
-        <!-- Breadcrumb navigation -->
         <el-breadcrumb separator="/" class="breadcrumb">
-          <el-breadcrumb-item>
-            <span class="breadcrumb-link" @click="goBucketRoot">Home</span>
-          </el-breadcrumb-item>
+          <el-breadcrumb-item><span class="breadcrumb-link" @click="goBucketRoot">Home</span></el-breadcrumb-item>
           <el-breadcrumb-item v-if="currentBucket">
             <span class="breadcrumb-link" @click="goBucketRoot">{{ currentBucket }}</span>
           </el-breadcrumb-item>
@@ -49,17 +35,13 @@
         </el-breadcrumb>
 
         <div class="toolbar-actions">
-          <el-button
-            v-if="currentBucket"
-            type="primary"
-            :icon="UploadFilled"
-            @click="showUploadDialog = true"
-          >Upload</el-button>
-          <el-button
-            v-if="currentBucket"
-            :icon="Share"
-            @click="openUploadLinkDialog"
-          >Upload Link</el-button>
+          <el-button v-if="currentBucket" :icon="Search" @click="searchVisible = !searchVisible">Search</el-button>
+          <el-button v-if="currentBucket" :icon="Clock" @click="openHistoryDrawer">History</el-button>
+          <el-button v-if="currentBucket" :icon="Finished" @click="openTaskDrawer">Tasks</el-button>
+          <el-button v-if="currentBucket" :icon="Brush" @click="openCleanupDrawer">Cleanup</el-button>
+          <el-button v-if="currentBucket" :icon="Connection" @click="openWebhookDrawer">Webhooks</el-button>
+          <el-button v-if="currentBucket" type="primary" :icon="UploadFilled" @click="showUploadDialog = true">Upload</el-button>
+          <el-button v-if="currentBucket" :icon="Share" @click="openUploadLinkDialog">Upload Link</el-button>
           <el-button
             v-if="currentBucket && !currentPrefix"
             type="danger"
@@ -70,15 +52,53 @@
         </div>
       </div>
 
-      <!-- Object table -->
+      <div v-if="currentBucket && searchVisible" class="search-panel">
+        <el-form :inline="true" class="search-form">
+          <el-form-item label="Name">
+            <el-input v-model="searchForm.name" placeholder="contains..." clearable />
+          </el-form-item>
+          <el-form-item label="Min Size">
+            <el-input-number v-model="searchForm.minSize" :min="0" :controls="false" />
+          </el-form-item>
+          <el-form-item label="Max Size">
+            <el-input-number v-model="searchForm.maxSize" :min="0" :controls="false" />
+          </el-form-item>
+          <el-form-item label="Modified">
+            <el-date-picker
+              v-model="searchDateRange"
+              type="datetimerange"
+              range-separator="to"
+              start-placeholder="Start"
+              end-placeholder="End"
+              value-format="YYYY-MM-DDTHH:mm:ss[Z]"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="applySearch">Search</el-button>
+            <el-button @click="resetSearch">Reset</el-button>
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <div v-if="selectedRows.length" class="batch-toolbar">
+        <span>{{ selectedRows.length }} selected</span>
+        <div class="batch-toolbar-actions">
+          <el-button size="small" :icon="Download" @click="downloadSelected">Download Zip</el-button>
+          <el-button size="small" :icon="FolderOpened" @click="openMoveDialog">Move</el-button>
+          <el-button size="small" :icon="Edit" @click="openRenameDialog">Rename</el-button>
+          <el-button size="small" type="danger" :icon="Delete" plain @click="confirmBatchDelete">Delete</el-button>
+        </div>
+      </div>
+
       <el-table
         v-loading="loading"
         :data="objects"
         style="width: 100%"
-        height="calc(100vh - 120px)"
+        height="calc(100vh - 180px)"
         empty-text="No objects – select a bucket or upload files"
+        @selection-change="onSelectionChange"
       >
-        <!-- Name column -->
+        <el-table-column type="selection" width="44" />
         <el-table-column label="Name" min-width="320" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="file-row" @click="handleRowClick(row)">
@@ -90,51 +110,33 @@
             </div>
           </template>
         </el-table-column>
-
-        <!-- Size column -->
-        <el-table-column label="Size" width="110" align="right">
+        <el-table-column label="Size" width="120" align="right">
           <template #default="{ row }">
             <span v-if="!row.isDir">{{ formatSize(row.size) }}</span>
             <span v-else style="color:#bbb">—</span>
           </template>
         </el-table-column>
-
-        <!-- Last modified column -->
-        <el-table-column label="Last Modified" width="180">
+        <el-table-column label="Last Modified" width="190">
           <template #default="{ row }">
             <span v-if="!row.isDir">{{ formatDate(row.lastModified) }}</span>
           </template>
         </el-table-column>
-
-        <!-- Actions column -->
-        <el-table-column label="Actions" width="240" fixed="right">
+        <el-table-column label="Actions" width="270" fixed="right">
           <template #default="{ row }">
-            <el-button
-              v-if="!row.isDir"
-              type="primary"
-              :icon="Download"
-              size="small"
-              @click.stop="downloadFile(row)"
-            >Download</el-button>
-            <el-button
-              v-if="!row.isDir"
-              :icon="Share"
-              size="small"
-              @click.stop="openDownloadLinkDialog(row)"
-            >Copy Link</el-button>
-            <el-button
-              type="danger"
-              :icon="Delete"
-              size="small"
-              plain
-              @click.stop="confirmDeleteObject(row)"
-            >Delete</el-button>
+            <el-button v-if="!row.isDir" type="primary" :icon="Download" size="small" @click.stop="downloadFile(row)">
+              Download
+            </el-button>
+            <el-button v-if="!row.isDir" :icon="Share" size="small" @click.stop="openDownloadLinkDialog(row)">
+              Copy Link
+            </el-button>
+            <el-button type="danger" :icon="Delete" size="small" plain @click.stop="confirmDeleteObject(row)">
+              Delete
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
     </div>
 
-    <!-- ===== Upload Dialog ===== -->
     <el-dialog v-model="showUploadDialog" title="Upload Files" width="520px" @closed="resetUpload">
       <div
         class="drop-zone"
@@ -146,13 +148,11 @@
       >
         <el-icon :size="48" color="#409eff"><UploadFilled /></el-icon>
         <p>Drop files here or <strong>click</strong> to select</p>
-        <p class="hint">Large files are streamed directly – no size limit</p>
+        <p class="hint">Files stream directly to S3 and a task record is created.</p>
       </div>
       <input ref="fileInputRef" type="file" multiple style="display:none" @change="onFileInputChange" />
-
-      <!-- Selected files list with per-file progress -->
       <div v-if="uploadFiles.length" class="upload-list">
-        <div v-for="f in uploadFiles" :key="f.name" class="upload-item">
+        <div v-for="f in uploadFiles" :key="`${f.name}-${f.size}`" class="upload-item">
           <el-icon><Document /></el-icon>
           <span class="upload-filename">{{ f.name }}</span>
           <span class="upload-size">{{ formatSize(f.size) }}</span>
@@ -161,45 +161,58 @@
         </div>
         <el-progress v-if="uploadProgress > 0" :percentage="uploadProgress" class="upload-progress" />
       </div>
-
       <template #footer>
         <el-button @click="showUploadDialog = false">Cancel</el-button>
-        <el-button
-          type="primary"
-          :disabled="!uploadFiles.length || uploading"
-          :loading="uploading"
-          @click="startUpload"
-        >Upload {{ uploadFiles.length > 0 ? `(${uploadFiles.length} file${uploadFiles.length > 1 ? 's' : ''})` : '' }}</el-button>
+        <el-button type="primary" :disabled="!uploadFiles.length || uploading" :loading="uploading" @click="startUpload">
+          Upload {{ uploadFiles.length ? `(${uploadFiles.length})` : '' }}
+        </el-button>
       </template>
     </el-dialog>
 
-    <!-- ===== Create Bucket Dialog ===== -->
     <el-dialog v-model="showCreateDialog" title="Create Bucket" width="400px">
-      <el-form :model="newBucket" label-width="80px" @submit.prevent="createBucket">
-        <el-form-item label="Name">
-          <el-input v-model="newBucket.name" placeholder="my-bucket" autofocus />
-        </el-form-item>
-        <el-form-item label="Region">
-          <el-input v-model="newBucket.region" placeholder="us-east-1" />
-        </el-form-item>
+      <el-form :model="newBucket" label-width="80px" @submit.prevent="createBucketAction">
+        <el-form-item label="Name"><el-input v-model="newBucket.name" placeholder="my-bucket" autofocus /></el-form-item>
+        <el-form-item label="Region"><el-input v-model="newBucket.region" placeholder="us-east-1" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showCreateDialog = false">Cancel</el-button>
-        <el-button type="primary" @click="createBucket">Create</el-button>
+        <el-button type="primary" @click="createBucketAction">Create</el-button>
       </template>
     </el-dialog>
 
-    <!-- ===== Download Link Dialog ===== -->
+    <el-dialog v-model="showMoveDialog" title="Move Selected Items" width="480px">
+      <el-form label-width="120px">
+        <el-form-item label="Target Prefix">
+          <el-input v-model="moveTargetPrefix" placeholder="archive/2026" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showMoveDialog = false">Cancel</el-button>
+        <el-button type="primary" @click="submitBatchMove">Move</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="showRenameDialog" title="Rename Selected Items" width="640px">
+      <div class="rename-list">
+        <div v-for="item in renameItems" :key="item.sourceKey" class="rename-item">
+          <span class="rename-source">{{ item.sourceKey }}</span>
+          <el-input v-model="item.newName" placeholder="New name" />
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="showRenameDialog = false">Cancel</el-button>
+        <el-button type="primary" @click="submitBatchRename">Rename</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="showDownloadLinkDialog" title="Generate Download Link" width="540px">
       <el-form label-width="100px">
-        <el-form-item label="File">
-          <span class="link-meta">{{ downloadLinkTarget?.key }}</span>
-        </el-form-item>
+        <el-form-item label="File"><span class="link-meta">{{ downloadLinkTarget?.key }}</span></el-form-item>
         <el-form-item label="Expires in">
           <el-select v-model="downloadLinkExpiry" style="width:100%">
             <el-option label="1 hour" :value="3600" />
             <el-option label="6 hours" :value="21600" />
-            <el-option label="24 hours (default)" :value="86400" />
+            <el-option label="24 hours" :value="86400" />
             <el-option label="3 days" :value="259200" />
             <el-option label="7 days" :value="604800" />
           </el-select>
@@ -207,96 +220,205 @@
       </el-form>
       <div v-if="downloadLinkUrl" class="generated-link">
         <el-input v-model="downloadLinkUrl" readonly>
-          <template #append>
-            <el-button :icon="CopyDocument" @click="copyToClipboard(downloadLinkUrl)">Copy</el-button>
-          </template>
+          <template #append><el-button :icon="CopyDocument" @click="copyToClipboard(downloadLinkUrl)">Copy</el-button></template>
         </el-input>
       </div>
       <template #footer>
         <el-button @click="showDownloadLinkDialog = false">Close</el-button>
-        <el-button type="primary" :loading="generatingDownloadLink" @click="generateDownloadLinkAction">
-          Generate Link
-        </el-button>
+        <el-button type="primary" :loading="generatingDownloadLink" @click="generateDownloadLinkAction">Generate Link</el-button>
       </template>
     </el-dialog>
 
-    <!-- ===== Upload Link Dialog ===== -->
     <el-dialog v-model="showUploadLinkDialog" title="Generate Upload Link" width="540px" @closed="resetUploadLink">
       <el-form label-width="100px">
         <el-form-item label="Destination">
           <el-input v-model="uploadLinkKey" placeholder="folder/filename.ext" />
-          <div class="field-hint">Full object key (path + filename) for the upload destination.</div>
+          <div class="field-hint">Full object key for the upload destination.</div>
         </el-form-item>
         <el-form-item label="Expires in">
           <el-select v-model="uploadLinkExpiry" style="width:100%">
             <el-option label="1 hour" :value="3600" />
             <el-option label="6 hours" :value="21600" />
-            <el-option label="24 hours (default)" :value="86400" />
+            <el-option label="24 hours" :value="86400" />
             <el-option label="3 days" :value="259200" />
             <el-option label="7 days" :value="604800" />
           </el-select>
         </el-form-item>
       </el-form>
-      <div v-if="uploadLinkUrl" class="generated-link">
-        <p class="link-label">Upload page link (share with the uploader):</p>
+      <div v-if="uploadPageUrl" class="generated-link">
         <el-input v-model="uploadPageUrl" readonly>
-          <template #append>
-            <el-button :icon="CopyDocument" @click="copyToClipboard(uploadPageUrl)">Copy</el-button>
-          </template>
+          <template #append><el-button :icon="CopyDocument" @click="copyToClipboard(uploadPageUrl)">Copy</el-button></template>
         </el-input>
       </div>
       <template #footer>
         <el-button @click="showUploadLinkDialog = false">Close</el-button>
-        <el-button type="primary" :loading="generatingUploadLink" @click="generateUploadLinkAction">
-          Generate Link
-        </el-button>
+        <el-button type="primary" :loading="generatingUploadLink" @click="generateUploadLinkAction">Generate Link</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="showTaskDrawer" title="Tasks" size="50%">
+      <div class="drawer-actions"><el-button :icon="Refresh" @click="refreshTasks">Refresh</el-button></div>
+      <el-table :data="tasks" size="small">
+        <el-table-column prop="type" label="Type" width="130" />
+        <el-table-column prop="bucket" label="Bucket" width="120" />
+        <el-table-column label="Progress" min-width="220">
+          <template #default="{ row }">
+            <el-progress :percentage="taskProgress(row)" :status="row.status === 'failed' ? 'exception' : row.status === 'completed' ? 'success' : undefined" />
+            <div class="small-text">{{ row.completedItems }}/{{ row.totalItems }} · {{ row.currentKey || row.message || 'pending' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="Status" width="110" />
+        <el-table-column label="Updated" width="180">
+          <template #default="{ row }">{{ formatDate(row.updatedAt) }}</template>
+        </el-table-column>
+      </el-table>
+    </el-drawer>
+
+    <el-drawer v-model="showHistoryDrawer" title="Operation History" size="55%">
+      <div class="drawer-actions"><el-button :icon="Refresh" @click="refreshHistory">Refresh</el-button></div>
+      <el-table :data="historyEntries" size="small">
+        <el-table-column prop="type" label="Type" width="170" />
+        <el-table-column prop="actor" label="Actor" width="110" />
+        <el-table-column prop="status" label="Status" width="90" />
+        <el-table-column label="Keys" min-width="260">
+          <template #default="{ row }">{{ (row.keys || []).join(', ') }}</template>
+        </el-table-column>
+        <el-table-column label="Created" width="180">
+          <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
+        </el-table-column>
+      </el-table>
+    </el-drawer>
+
+    <el-drawer v-model="showCleanupDrawer" title="Cleanup Policies" size="55%">
+      <el-form label-width="130px" class="drawer-form">
+        <el-form-item label="Policy Name"><el-input v-model="cleanupForm.name" /></el-form-item>
+        <el-form-item label="Bucket"><el-input v-model="cleanupForm.bucket" /></el-form-item>
+        <el-form-item label="Prefix"><el-input v-model="cleanupForm.prefix" placeholder="logs/" /></el-form-item>
+        <el-form-item label="Name Contains"><el-input v-model="cleanupForm.nameContains" /></el-form-item>
+        <el-form-item label="Older Than Days"><el-input-number v-model="cleanupForm.olderThanDays" :min="0" /></el-form-item>
+        <el-form-item label="Keep Latest"><el-input-number v-model="cleanupForm.keepLatest" :min="0" /></el-form-item>
+        <el-form-item label="Min Size"><el-input-number v-model="cleanupForm.minSize" :min="0" :controls="false" /></el-form-item>
+        <el-form-item label="Max Size"><el-input-number v-model="cleanupForm.maxSize" :min="0" :controls="false" /></el-form-item>
+        <el-form-item label="Enabled"><el-switch v-model="cleanupForm.enabled" /></el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="createCleanupPolicyAction">Save Policy</el-button>
+        </el-form-item>
+      </el-form>
+      <el-table :data="cleanupPolicies" size="small">
+        <el-table-column prop="name" label="Name" min-width="150" />
+        <el-table-column prop="bucket" label="Bucket" width="120" />
+        <el-table-column prop="prefix" label="Prefix" min-width="140" />
+        <el-table-column label="Last Run" width="180">
+          <template #default="{ row }">{{ formatDate(row.lastRunAt) }}</template>
+        </el-table-column>
+        <el-table-column label="Actions" width="180">
+          <template #default="{ row }">
+            <el-button size="small" @click="runCleanupPolicyAction(row)">Run</el-button>
+            <el-button size="small" type="danger" plain @click="deleteCleanupPolicyAction(row)">Delete</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-drawer>
+
+    <el-drawer v-model="showWebhookDrawer" title="Webhooks" size="60%">
+      <el-form label-width="110px" class="drawer-form">
+        <el-form-item label="Name"><el-input v-model="webhookForm.name" /></el-form-item>
+        <el-form-item label="URL"><el-input v-model="webhookForm.url" placeholder="https://example.com/webhook" /></el-form-item>
+        <el-form-item label="Events">
+          <el-select v-model="webhookForm.events" multiple style="width:100%">
+            <el-option v-for="event in webhookEvents" :key="event" :label="event" :value="event" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Secret"><el-input v-model="webhookForm.secret" type="password" show-password /></el-form-item>
+        <el-form-item label="Enabled"><el-switch v-model="webhookForm.enabled" /></el-form-item>
+        <el-form-item><el-button type="primary" @click="createWebhookAction">Save Webhook</el-button></el-form-item>
+      </el-form>
+      <el-table :data="webhooks" size="small">
+        <el-table-column prop="name" label="Name" min-width="140" />
+        <el-table-column prop="url" label="URL" min-width="220" show-overflow-tooltip />
+        <el-table-column label="Events" min-width="180">
+          <template #default="{ row }">{{ (row.events || []).join(', ') }}</template>
+        </el-table-column>
+        <el-table-column label="Actions" width="120">
+          <template #default="{ row }">
+            <el-button size="small" type="danger" plain @click="deleteWebhookAction(row)">Delete</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <h4 class="drawer-subtitle">Recent Deliveries</h4>
+      <el-table :data="deliveries" size="small">
+        <el-table-column prop="webhook" label="Webhook" min-width="130" />
+        <el-table-column prop="event" label="Event" min-width="150" />
+        <el-table-column prop="status" label="Status" width="100" />
+        <el-table-column prop="statusCode" label="HTTP" width="80" />
+        <el-table-column prop="error" label="Error" min-width="180" show-overflow-tooltip />
+      </el-table>
+    </el-drawer>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, UploadFilled, Delete, Download, Folder, Document, Coin, Share, CopyDocument } from '@element-plus/icons-vue'
+import {
+  Plus,
+  UploadFilled,
+  Delete,
+  Download,
+  Folder,
+  Document,
+  Coin,
+  Share,
+  CopyDocument,
+  Search,
+  Clock,
+  Finished,
+  Brush,
+  Connection,
+  FolderOpened,
+  Edit,
+  Refresh
+} from '@element-plus/icons-vue'
 import {
   listBuckets,
-  createBucket as apiCreateBucket,
-  deleteBucket as apiDeleteBucket,
+  createBucket,
+  deleteBucket,
   listObjects,
+  searchObjects,
   downloadUrl,
   uploadObjects,
   deleteObject,
+  batchDelete,
+  batchMove,
+  batchRename,
+  batchDownload,
+  listTasks,
+  listHistory,
+  listCleanupPolicies,
+  createCleanupPolicy,
+  deleteCleanupPolicy,
+  runCleanupPolicy,
+  listWebhooks,
+  createWebhook,
+  deleteWebhook,
+  listWebhookDeliveries,
   generateDownloadLink,
   generateUploadLink
 } from '../api'
 
-// ---- routing ----
 const route = useRoute()
 const router = useRouter()
 
-// ---- reactive state ----
 const buckets = ref([])
 const objects = ref([])
 const loading = ref(false)
+const selectedRows = ref([])
+const searchVisible = ref(false)
+const searchForm = ref({ name: '', minSize: null, maxSize: null })
+const searchDateRange = ref([])
+const searchActive = ref(false)
 
-// Currently selected bucket and "folder" prefix derived from the URL
-const currentBucket = computed(() => route.params.bucket || '')
-const currentPrefix = computed(() => {
-  const match = route.params.pathMatch
-  if (!match) return ''
-  const raw = Array.isArray(match) ? match.join('/') : match
-  return raw ? raw + '/' : ''
-})
-
-const prefixParts = computed(() => {
-  const p = currentPrefix.value
-  if (!p) return []
-  return p.split('/').filter(Boolean)
-})
-
-// Upload state
 const showUploadDialog = ref(false)
 const uploadFiles = ref([])
 const uploading = ref(false)
@@ -304,47 +426,143 @@ const uploadProgress = ref(0)
 const isDragging = ref(false)
 const fileInputRef = ref(null)
 
-// Create bucket state
 const showCreateDialog = ref(false)
 const newBucket = ref({ name: '', region: 'us-east-1' })
 
-// Download link state
+const showMoveDialog = ref(false)
+const moveTargetPrefix = ref('')
+const showRenameDialog = ref(false)
+const renameItems = ref([])
+
 const showDownloadLinkDialog = ref(false)
 const downloadLinkTarget = ref(null)
 const downloadLinkExpiry = ref(86400)
 const downloadLinkUrl = ref('')
 const generatingDownloadLink = ref(false)
 
-// Upload link state
 const showUploadLinkDialog = ref(false)
 const uploadLinkKey = ref('')
 const uploadLinkExpiry = ref(86400)
-const uploadLinkUrl = ref('')
 const uploadPageUrl = ref('')
 const generatingUploadLink = ref(false)
 
-// ---- lifecycle ----
-onMounted(() => {
-  fetchBuckets()
+const showTaskDrawer = ref(false)
+const tasks = ref([])
+const showHistoryDrawer = ref(false)
+const historyEntries = ref([])
+
+const showCleanupDrawer = ref(false)
+const cleanupPolicies = ref([])
+const cleanupForm = ref({
+  name: '',
+  bucket: '',
+  prefix: '',
+  nameContains: '',
+  olderThanDays: 0,
+  keepLatest: 0,
+  minSize: 0,
+  maxSize: 0,
+  enabled: true
 })
+
+const showWebhookDrawer = ref(false)
+const webhooks = ref([])
+const deliveries = ref([])
+const webhookEvents = [
+  'object.uploaded',
+  'object.deleted',
+  'object.moved',
+  'object.renamed',
+  'object.downloaded',
+  'object.batch_downloaded',
+  'cleanup.completed'
+]
+const webhookForm = ref({ name: '', url: '', events: ['object.uploaded'], secret: '', enabled: true })
+
+const currentBucket = computed(() => route.params.bucket || '')
+const currentPrefix = computed(() => {
+  const match = route.params.pathMatch
+  if (!match) return ''
+  const raw = Array.isArray(match) ? match.join('/') : match
+  return raw ? `${raw}/` : ''
+})
+const prefixParts = computed(() => currentPrefix.value.split('/').filter(Boolean))
+
+let poller = null
+
+onMounted(async () => {
+  await fetchBuckets()
+  startPolling()
+})
+
+onUnmounted(() => stopPolling())
 
 watch(
   () => [currentBucket.value, currentPrefix.value],
-  ([bucket]) => {
-    if (bucket) fetchObjects()
-    else objects.value = []
+  async ([bucket]) => {
+    cleanupForm.value.bucket = bucket || cleanupForm.value.bucket
+    moveTargetPrefix.value = currentPrefix.value
+    if (!bucket) {
+      objects.value = []
+      return
+    }
+    await fetchObjects()
   },
   { immediate: true }
 )
 
-// ---- bucket helpers ----
 async function fetchBuckets() {
   try {
     const { data } = await listBuckets()
     buckets.value = data || []
-  } catch (e) {
-    ElMessage.error('Failed to load buckets: ' + (e.response?.data?.error || e.message))
+  } catch (error) {
+    ElMessage.error('Failed to load buckets: ' + (error.response?.data?.error || error.message))
   }
+}
+
+async function fetchObjects() {
+  if (!currentBucket.value) return
+  loading.value = true
+  selectedRows.value = []
+  try {
+    const params = buildSearchParams()
+    const request = searchActive.value ? searchObjects(currentBucket.value, params) : listObjects(currentBucket.value, currentPrefix.value)
+    const { data } = await request
+    objects.value = data || []
+  } catch (error) {
+    objects.value = []
+    ElMessage.error('Failed to load objects: ' + (error.response?.data?.error || error.message))
+  } finally {
+    loading.value = false
+  }
+}
+
+function buildSearchParams() {
+  const params = {
+    prefix: currentPrefix.value,
+    name: searchForm.value.name || undefined,
+    minSize: searchForm.value.minSize ?? undefined,
+    maxSize: searchForm.value.maxSize ?? undefined,
+    modifiedAfter: searchDateRange.value?.[0] || undefined,
+    modifiedBefore: searchDateRange.value?.[1] || undefined
+  }
+  return params
+}
+
+function applySearch() {
+  searchActive.value = true
+  fetchObjects()
+}
+
+function resetSearch() {
+  searchForm.value = { name: '', minSize: null, maxSize: null }
+  searchDateRange.value = []
+  searchActive.value = false
+  fetchObjects()
+}
+
+function onSelectionChange(rows) {
+  selectedRows.value = rows
 }
 
 function selectBucket(name) {
@@ -352,19 +570,17 @@ function selectBucket(name) {
 }
 
 function goBucketRoot() {
-  if (currentBucket.value) {
-    router.push({ name: 'bucket', params: { bucket: currentBucket.value } })
-  } else {
-    router.push({ name: 'browser' })
-  }
+  if (currentBucket.value) router.push({ name: 'bucket', params: { bucket: currentBucket.value } })
+  else router.push({ name: 'browser' })
 }
 
 function navigateToDepth(index) {
-  const parts = prefixParts.value.slice(0, index + 1)
-  router.push({
-    name: 'folder',
-    params: { bucket: currentBucket.value, pathMatch: parts.join('/') }
-  })
+  router.push({ name: 'folder', params: { bucket: currentBucket.value, pathMatch: prefixParts.value.slice(0, index + 1).join('/') } })
+}
+
+function handleRowClick(row) {
+  if (!row.isDir) return
+  router.push({ name: 'folder', params: { bucket: currentBucket.value, pathMatch: row.key.replace(/\/$/, '') } })
 }
 
 function openCreateBucket() {
@@ -372,63 +588,34 @@ function openCreateBucket() {
   showCreateDialog.value = true
 }
 
-async function createBucket() {
+async function createBucketAction() {
   const name = newBucket.value.name.trim()
   if (!name) return ElMessage.warning('Bucket name is required')
   try {
-    await apiCreateBucket(name, newBucket.value.region || 'us-east-1')
-    ElMessage.success(`Bucket "${name}" created`)
+    await createBucket(name, newBucket.value.region || 'us-east-1')
     showCreateDialog.value = false
+    ElMessage.success(`Bucket "${name}" created`)
     await fetchBuckets()
-  } catch (e) {
-    ElMessage.error('Failed to create bucket: ' + (e.response?.data?.error || e.message))
+  } catch (error) {
+    ElMessage.error('Failed to create bucket: ' + (error.response?.data?.error || error.message))
   }
 }
 
 async function confirmDeleteBucket() {
   try {
-    await ElMessageBox.confirm(
-      `Delete bucket "${currentBucket.value}"? All objects must be removed first.`,
-      'Delete Bucket',
-      { type: 'warning' }
-    )
-    await apiDeleteBucket(currentBucket.value)
+    await ElMessageBox.confirm(`Delete bucket "${currentBucket.value}"? All objects must be removed first.`, 'Delete Bucket', { type: 'warning' })
+    await deleteBucket(currentBucket.value)
     ElMessage.success('Bucket deleted')
     router.push({ name: 'browser' })
     await fetchBuckets()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('Failed: ' + (e.response?.data?.error || e.message))
+  } catch (error) {
+    if (error !== 'cancel') ElMessage.error('Failed: ' + (error.response?.data?.error || error.message))
   }
-}
-
-// ---- object helpers ----
-async function fetchObjects() {
-  loading.value = true
-  try {
-    const { data } = await listObjects(currentBucket.value, currentPrefix.value)
-    objects.value = data || []
-  } catch (e) {
-    ElMessage.error('Failed to list objects: ' + (e.response?.data?.error || e.message))
-    objects.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
-function handleRowClick(row) {
-  if (!row.isDir) return
-  // Navigate into the sub-folder; strip leading bucket name from key
-  const key = row.key.replace(/\/$/, '')
-  router.push({
-    name: 'folder',
-    params: { bucket: currentBucket.value, pathMatch: key }
-  })
 }
 
 function downloadFile(row) {
-  const url = downloadUrl(currentBucket.value, row.key)
   const a = document.createElement('a')
-  a.href = url
+  a.href = downloadUrl(currentBucket.value, row.key)
   a.download = row.name
   document.body.appendChild(a)
   a.click()
@@ -436,36 +623,35 @@ function downloadFile(row) {
 }
 
 async function confirmDeleteObject(row) {
-  const label = row.isDir ? `folder "${row.name}" (recursive)` : `file "${row.name}"`
   try {
-    await ElMessageBox.confirm(`Delete ${label}?`, 'Confirm Delete', { type: 'warning' })
+    await ElMessageBox.confirm(`Delete ${row.isDir ? 'folder' : 'file'} "${row.name}"?`, 'Confirm Delete', { type: 'warning' })
     await deleteObject(currentBucket.value, row.key)
     ElMessage.success('Deleted')
     await fetchObjects()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('Failed: ' + (e.response?.data?.error || e.message))
+    await refreshHistory()
+  } catch (error) {
+    if (error !== 'cancel') ElMessage.error('Failed: ' + (error.response?.data?.error || error.message))
   }
 }
 
-// ---- upload helpers ----
 function triggerFileInput() {
   fileInputRef.value?.click()
 }
 
-function onFileInputChange(e) {
-  addFiles(Array.from(e.target.files))
-  e.target.value = ''
+function onFileInputChange(event) {
+  addFiles(Array.from(event.target.files || []))
+  event.target.value = ''
 }
 
-function onDrop(e) {
+function onDrop(event) {
   isDragging.value = false
-  addFiles(Array.from(e.dataTransfer.files))
+  addFiles(Array.from(event.dataTransfer.files || []))
 }
 
 function addFiles(files) {
-  for (const f of files) {
-    if (!uploadFiles.value.find((u) => u.name === f.name && u.size === f.size)) {
-      uploadFiles.value.push(Object.assign(f, { status: 'pending' }))
+  for (const file of files) {
+    if (!uploadFiles.value.find((item) => item.name === file.name && item.size === file.size)) {
+      uploadFiles.value.push(Object.assign(file, { status: 'pending' }))
     }
   }
 }
@@ -478,33 +664,106 @@ function resetUpload() {
 
 async function startUpload() {
   if (!uploadFiles.value.length) return
+  const taskId = createTaskId('upload')
   uploading.value = true
   uploadProgress.value = 0
   try {
     await uploadObjects(
       currentBucket.value,
       uploadFiles.value,
-      // strip trailing slash from prefix
       currentPrefix.value.replace(/\/$/, ''),
-      (e) => {
-        if (e.total) {
-          uploadProgress.value = Math.round((e.loaded / e.total) * 100)
-        }
-      }
+      (event) => {
+        if (event.total) uploadProgress.value = Math.round((event.loaded / event.total) * 100)
+      },
+      taskId
     )
-    uploadFiles.value.forEach((f) => (f.status = 'done'))
+    uploadFiles.value.forEach((file) => {
+      file.status = 'done'
+    })
     ElMessage.success(`${uploadFiles.value.length} file(s) uploaded`)
     showUploadDialog.value = false
-    await fetchObjects()
-  } catch (e) {
-    uploadFiles.value.forEach((f) => (f.status = 'error'))
-    ElMessage.error('Upload failed: ' + (e.response?.data?.error || e.message))
+    await Promise.all([fetchObjects(), refreshTasks(), refreshHistory()])
+  } catch (error) {
+    uploadFiles.value.forEach((file) => {
+      file.status = 'error'
+    })
+    ElMessage.error('Upload failed: ' + (error.response?.data?.error || error.message))
   } finally {
     uploading.value = false
   }
 }
 
-// ---- presign link helpers ----
+function selectedKeys() {
+  return selectedRows.value.map((row) => row.key)
+}
+
+async function downloadSelected() {
+  if (!selectedRows.value.length) return
+  try {
+    const { data } = await batchDownload(currentBucket.value, selectedKeys())
+    const blob = new Blob([data], { type: 'application/zip' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${currentBucket.value}-batch.zip`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+    await refreshHistory()
+  } catch (error) {
+    ElMessage.error('Batch download failed: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+function openMoveDialog() {
+  moveTargetPrefix.value = currentPrefix.value
+  showMoveDialog.value = true
+}
+
+async function submitBatchMove() {
+  const prefix = normalizePrefix(moveTargetPrefix.value)
+  const items = selectedRows.value.map((row) => ({
+    sourceKey: row.key,
+    targetKey: `${prefix}${row.name}${row.isDir ? '/' : ''}`
+  }))
+  try {
+    await batchMove(currentBucket.value, items, createTaskId('move'))
+    showMoveDialog.value = false
+    ElMessage.success('Move started/completed')
+    await Promise.all([fetchObjects(), refreshTasks(), refreshHistory()])
+  } catch (error) {
+    ElMessage.error('Move failed: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+function openRenameDialog() {
+  renameItems.value = selectedRows.value.map((row) => ({ sourceKey: row.key, newName: row.name }))
+  showRenameDialog.value = true
+}
+
+async function submitBatchRename() {
+  try {
+    await batchRename(currentBucket.value, renameItems.value, createTaskId('rename'))
+    showRenameDialog.value = false
+    ElMessage.success('Rename started/completed')
+    await Promise.all([fetchObjects(), refreshTasks(), refreshHistory()])
+  } catch (error) {
+    ElMessage.error('Rename failed: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+async function confirmBatchDelete() {
+  try {
+    await ElMessageBox.confirm(`Delete ${selectedRows.value.length} selected item(s)?`, 'Batch Delete', { type: 'warning' })
+    await batchDelete(currentBucket.value, selectedKeys(), createTaskId('delete'))
+    ElMessage.success('Delete started/completed')
+    await Promise.all([fetchObjects(), refreshTasks(), refreshHistory()])
+  } catch (error) {
+    if (error !== 'cancel') ElMessage.error('Delete failed: ' + (error.response?.data?.error || error.message))
+  }
+}
+
 function openDownloadLinkDialog(row) {
   downloadLinkTarget.value = row
   downloadLinkExpiry.value = 86400
@@ -516,14 +775,10 @@ async function generateDownloadLinkAction() {
   if (!downloadLinkTarget.value) return
   generatingDownloadLink.value = true
   try {
-    const { data } = await generateDownloadLink(
-      currentBucket.value,
-      downloadLinkTarget.value.key,
-      downloadLinkExpiry.value
-    )
+    const { data } = await generateDownloadLink(currentBucket.value, downloadLinkTarget.value.key, downloadLinkExpiry.value)
     downloadLinkUrl.value = data.url
-  } catch (e) {
-    ElMessage.error('Failed to generate link: ' + (e.response?.data?.error || e.message))
+  } catch (error) {
+    ElMessage.error('Failed to generate link: ' + (error.response?.data?.error || error.message))
   } finally {
     generatingDownloadLink.value = false
   }
@@ -531,9 +786,8 @@ async function generateDownloadLinkAction() {
 
 function openUploadLinkDialog() {
   uploadLinkKey.value = currentPrefix.value
-  uploadLinkExpiry.value = 86400
-  uploadLinkUrl.value = ''
   uploadPageUrl.value = ''
+  uploadLinkExpiry.value = 86400
   showUploadLinkDialog.value = true
 }
 
@@ -543,80 +797,216 @@ async function generateUploadLinkAction() {
   generatingUploadLink.value = true
   try {
     const { data } = await generateUploadLink(currentBucket.value, key, uploadLinkExpiry.value)
-    uploadLinkUrl.value = data.url
-    const filename = key.split('/').pop()
+    const filename = key.split('/').pop() || key
     const params = new URLSearchParams({ url: data.url, filename })
     uploadPageUrl.value = `${window.location.origin}/upload?${params.toString()}`
-  } catch (e) {
-    ElMessage.error('Failed to generate link: ' + (e.response?.data?.error || e.message))
+  } catch (error) {
+    ElMessage.error('Failed to generate link: ' + (error.response?.data?.error || error.message))
   } finally {
     generatingUploadLink.value = false
   }
 }
 
 function resetUploadLink() {
-  uploadLinkUrl.value = ''
   uploadPageUrl.value = ''
 }
 
-async function copyToClipboard(text) {
-  if (!text) {
-    ElMessage.warning('Nothing to copy')
-    return
+function openTaskDrawer() {
+  showTaskDrawer.value = true
+  refreshTasks()
+}
+
+function openHistoryDrawer() {
+  showHistoryDrawer.value = true
+  refreshHistory()
+}
+
+function openCleanupDrawer() {
+  cleanupForm.value.bucket = currentBucket.value
+  showCleanupDrawer.value = true
+  refreshCleanupPolicies()
+}
+
+function openWebhookDrawer() {
+  showWebhookDrawer.value = true
+  refreshWebhooks()
+}
+
+async function refreshTasks() {
+  try {
+    const { data } = await listTasks({ bucket: currentBucket.value || undefined })
+    tasks.value = data || []
+  } catch (error) {
+    ElMessage.error('Failed to load tasks: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+async function refreshHistory() {
+  try {
+    const { data } = await listHistory({ bucket: currentBucket.value || undefined })
+    historyEntries.value = data || []
+  } catch (error) {
+    ElMessage.error('Failed to load history: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+async function refreshCleanupPolicies() {
+  try {
+    const { data } = await listCleanupPolicies()
+    cleanupPolicies.value = (data || []).filter((policy) => !currentBucket.value || policy.bucket === currentBucket.value)
+  } catch (error) {
+    ElMessage.error('Failed to load cleanup policies: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+async function createCleanupPolicyAction() {
+  if (!cleanupForm.value.name || !cleanupForm.value.bucket) {
+    return ElMessage.warning('Policy name and bucket are required')
   }
   try {
-    // Prefer async clipboard API when available (requires secure context in most browsers).
+    await createCleanupPolicy({ ...cleanupForm.value })
+    cleanupForm.value = {
+      name: '',
+      bucket: currentBucket.value,
+      prefix: currentPrefix.value,
+      nameContains: '',
+      olderThanDays: 0,
+      keepLatest: 0,
+      minSize: 0,
+      maxSize: 0,
+      enabled: true
+    }
+    ElMessage.success('Cleanup policy saved')
+    await refreshCleanupPolicies()
+  } catch (error) {
+    ElMessage.error('Failed to save cleanup policy: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+async function runCleanupPolicyAction(policy) {
+  try {
+    const { data } = await runCleanupPolicy(policy.id)
+    ElMessage.success(`Cleanup removed ${(data.deleted || []).length} object(s)`) 
+    await Promise.all([fetchObjects(), refreshCleanupPolicies(), refreshHistory(), refreshTasks()])
+  } catch (error) {
+    ElMessage.error('Cleanup failed: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+async function deleteCleanupPolicyAction(policy) {
+  try {
+    await deleteCleanupPolicy(policy.id)
+    ElMessage.success('Policy deleted')
+    await refreshCleanupPolicies()
+  } catch (error) {
+    ElMessage.error('Failed to delete policy: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+async function refreshWebhooks() {
+  try {
+    const [{ data: hooks }, { data: deliveryItems }] = await Promise.all([listWebhooks(), listWebhookDeliveries()])
+    webhooks.value = hooks || []
+    deliveries.value = deliveryItems || []
+  } catch (error) {
+    ElMessage.error('Failed to load webhooks: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+async function createWebhookAction() {
+  if (!webhookForm.value.name || !webhookForm.value.url) return ElMessage.warning('Webhook name and URL are required')
+  try {
+    await createWebhook({ ...webhookForm.value })
+    webhookForm.value = { name: '', url: '', events: ['object.uploaded'], secret: '', enabled: true }
+    ElMessage.success('Webhook saved')
+    await refreshWebhooks()
+  } catch (error) {
+    ElMessage.error('Failed to save webhook: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+async function deleteWebhookAction(webhook) {
+  try {
+    await deleteWebhook(webhook.id)
+    ElMessage.success('Webhook deleted')
+    await refreshWebhooks()
+  } catch (error) {
+    ElMessage.error('Failed to delete webhook: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+function startPolling() {
+  stopPolling()
+  poller = window.setInterval(() => {
+    if (currentBucket.value) {
+      refreshTasks()
+    }
+    if (showWebhookDrawer.value) {
+      refreshWebhooks()
+    }
+  }, 5000)
+}
+
+function stopPolling() {
+  if (poller) {
+    window.clearInterval(poller)
+    poller = null
+  }
+}
+
+function taskProgress(task) {
+  if (!task?.totalItems) return task?.status === 'completed' ? 100 : 0
+  return Math.min(100, Math.round((task.completedItems / task.totalItems) * 100))
+}
+
+async function copyToClipboard(text) {
+  if (!text) return
+  try {
     if (window.isSecureContext && navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text)
-      ElMessage.success('Copied to clipboard')
-      return
-    }
-    throw new Error('Clipboard API unavailable')
-  } catch (e) {
-    // Fallback for http / older browsers / permission issues.
-    try {
+    } else {
       const ta = document.createElement('textarea')
       ta.value = text
       ta.setAttribute('readonly', '')
       ta.style.position = 'fixed'
-      ta.style.top = '-9999px'
-      ta.style.left = '-9999px'
       ta.style.opacity = '0'
       document.body.appendChild(ta)
-      ta.focus()
       ta.select()
-      ta.setSelectionRange(0, ta.value.length)
-      const ok = document.execCommand('copy')
+      document.execCommand('copy')
       document.body.removeChild(ta)
-      if (ok) {
-        ElMessage.success('Copied to clipboard')
-        return
-      }
-      throw new Error('execCommand returned false')
-    } catch (e2) {
-      ElMessage.error('Failed to copy')
-      // Keep console detail for debugging without spamming UI.
-      console.warn('copyToClipboard failed', e, e2)
     }
+    ElMessage.success('Copied to clipboard')
+  } catch {
+    ElMessage.error('Failed to copy')
   }
 }
 
-// ---- formatting helpers ----
+function normalizePrefix(prefix) {
+  const value = (prefix || '').trim().replace(/^\/+/, '').replace(/\/+/g, '/')
+  if (!value) return ''
+  return value.endsWith('/') ? value : `${value}/`
+}
+
+function createTaskId(prefix) {
+  if (window.crypto?.randomUUID) return `${prefix}-${window.crypto.randomUUID()}`
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 function formatSize(bytes) {
   if (bytes == null) return ''
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   let i = 0
-  let n = bytes
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024
-    i++
+  let value = bytes
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024
+    i += 1
   }
-  return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+  return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
 }
 
-function formatDate(ts) {
-  if (!ts) return ''
-  return new Date(ts).toLocaleString()
+function formatDate(value) {
+  if (!value) return '—'
+  return new Date(value).toLocaleString()
 }
 </script>
 
@@ -627,7 +1017,6 @@ function formatDate(ts) {
   overflow: hidden;
 }
 
-/* ----- Sidebar ----- */
 .sidebar {
   width: 220px;
   min-width: 220px;
@@ -672,7 +1061,6 @@ function formatDate(ts) {
   font-size: 14px;
   color: #303133;
   transition: background 0.15s;
-  user-select: none;
 }
 
 .bucket-item:hover {
@@ -690,7 +1078,6 @@ function formatDate(ts) {
   white-space: nowrap;
 }
 
-/* ----- Main area ----- */
 .main-area {
   flex: 1;
   display: flex;
@@ -698,7 +1085,8 @@ function formatDate(ts) {
   overflow: hidden;
 }
 
-.toolbar {
+.toolbar,
+.batch-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -708,10 +1096,12 @@ function formatDate(ts) {
   flex-wrap: wrap;
 }
 
-.toolbar-actions {
+.toolbar-actions,
+.batch-toolbar-actions,
+.drawer-actions {
   display: flex;
   gap: 8px;
-  flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .breadcrumb {
@@ -723,11 +1113,16 @@ function formatDate(ts) {
   color: #409eff;
 }
 
-.breadcrumb-link:hover {
-  text-decoration: underline;
+.search-panel {
+  padding: 12px 16px 0;
+  border-bottom: 1px solid #e4e7ed;
 }
 
-/* ----- File rows ----- */
+.search-form,
+.drawer-form {
+  margin-bottom: 16px;
+}
+
 .file-row {
   display: flex;
   align-items: center;
@@ -735,15 +1130,10 @@ function formatDate(ts) {
   cursor: pointer;
 }
 
-.file-icon {
-  flex-shrink: 0;
-}
-
 .folder-name {
   font-weight: 500;
 }
 
-/* ----- Upload dialog ----- */
 .drop-zone {
   border: 2px dashed #c0c4cc;
   border-radius: 8px;
@@ -759,64 +1149,49 @@ function formatDate(ts) {
   background: #ecf5ff;
 }
 
-.drop-zone p {
-  margin: 8px 0 0;
-  color: #606266;
-}
-
-.hint {
+.hint,
+.small-text,
+.field-hint {
+  color: #909399;
   font-size: 12px;
-  color: #909399 !important;
 }
 
-.upload-list {
+.upload-list,
+.rename-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin-top: 16px;
 }
 
-.upload-item {
+.upload-item,
+.rename-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid #f0f0f0;
-  font-size: 13px;
+  gap: 10px;
 }
 
-.upload-filename {
+.upload-filename,
+.rename-source {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.upload-size {
-  color: #909399;
-  flex-shrink: 0;
-}
-
 .upload-progress {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .generated-link {
   margin-top: 16px;
 }
 
-.link-label {
-  margin: 0 0 8px;
-  font-size: 13px;
-  color: #606266;
-}
-
 .link-meta {
-  font-size: 13px;
-  color: #303133;
   word-break: break-all;
 }
 
-.field-hint {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 4px;
+.drawer-subtitle {
+  margin: 20px 0 12px;
 }
 </style>
