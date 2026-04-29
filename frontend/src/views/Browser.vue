@@ -120,7 +120,7 @@
         <div v-if="selectedRows.length" class="batch-toolbar">
           <span>{{ selectedRows.length }} selected</span>
           <div class="batch-toolbar-actions">
-            <el-button size="small" :icon="Download" @click="downloadSelected">Download ZIP</el-button>
+            <el-button size="small" :icon="Download" @click="downloadSelected">Download Zip</el-button>
             <el-button size="small" :icon="FolderOpened" @click="openMoveDialog">Move</el-button>
             <el-button size="small" :icon="Edit" @click="openRenameDialog">Rename</el-button>
             <el-button size="small" type="danger" :icon="Delete" plain @click="confirmBatchDelete">Delete</el-button>
@@ -219,7 +219,7 @@
           <el-progress :percentage="fileProgress(f)" :status="f.status === 'error' ? 'exception' : f.status === 'done' ? 'success' : undefined" />
           <div class="small-text upload-item-detail">
             <span>{{ formatSize(f.uploadedBytes) }} / {{ formatSize(f.size) }}</span>
-            <span v-if="f.error">{{ toEnglishText(f.error) }}</span>
+            <span v-if="f.error">{{ extractEnglishText(f.error) }}</span>
           </div>
         </div>
       </div>
@@ -554,7 +554,7 @@ const PENDING_STATUS_LABEL = 'Pending'
 const workspaceCopy = {
   default: {
     eyebrow: 'Storage workspace',
-    title: 'Select a bucket to start managing storage',
+    title: 'Select a bucket to start curating storage',
     subtitle: 'Editorial hierarchy, warm surfaces, and clearer language for every storage task.',
     description: 'Choose a bucket on the left to browse objects, share links, and run cleanup flows without leaving the workspace.'
   },
@@ -1375,11 +1375,11 @@ function createTaskId(prefix) {
 
 function taskMessage(row) {
   if (row.currentKey) return row.currentKey
-  if (row.message) return toEnglishText(row.message)
+  if (row.message) return extractEnglishText(row.message)
   return PENDING_STATUS_LABEL
 }
 
-function toEnglishText(text) {
+function extractEnglishText(text) {
   if (!text) return ''
   const [english] = text.split(' / ')
   return english || text
