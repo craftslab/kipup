@@ -166,8 +166,8 @@ func bearerToken(header string) string {
 	if header == "" {
 		return ""
 	}
-	const prefix = "Bearer "
-	if strings.HasPrefix(strings.ToLower(header), strings.ToLower(prefix)) {
+	const prefix = "bearer "
+	if strings.HasPrefix(strings.ToLower(header), prefix) {
 		return strings.TrimSpace(header[len(prefix):])
 	}
 	return header

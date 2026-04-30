@@ -23,6 +23,7 @@ var (
 	ErrInvalidRole         = errors.New("invalid role")
 	ErrInvalidUsername     = errors.New("username must be 3-64 characters")
 	ErrInvalidPassword     = errors.New("password must be 4-128 characters")
+	maxStoredSessions      = 500
 	defaultSessionLifetime = 7 * 24 * time.Hour
 	defaultUserPermissions = []Permission{PermissionUpload, PermissionDownload, PermissionSearch, PermissionPresign}
 )
@@ -167,8 +168,8 @@ func (s *Service) SignIn(username, password string) (string, User, error) {
 	if err := s.store.update(func(state *State) error {
 		pruneExpiredSessions(state, now)
 		state.Sessions = append([]Session{session}, state.Sessions...)
-		if len(state.Sessions) > 500 {
-			state.Sessions = state.Sessions[:500]
+		if len(state.Sessions) > maxStoredSessions {
+			state.Sessions = state.Sessions[:maxStoredSessions]
 		}
 		return nil
 	}); err != nil {

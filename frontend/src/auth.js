@@ -27,7 +27,6 @@ export function useAuth() {
   const currentUser = computed(() => state.user)
   const isAuthenticated = computed(() => Boolean(state.token && state.user))
   const isAdmin = computed(() => state.user?.role === 'admin')
-  const hasPermission = (permission) => isAdmin.value || (state.user?.permissions || []).includes(permission)
 
   return {
     state,
@@ -36,6 +35,10 @@ export function useAuth() {
     isAdmin,
     hasPermission
   }
+}
+
+export function hasPermission(permission) {
+  return state.user?.role === 'admin' || (state.user?.permissions || []).includes(permission)
 }
 
 export function hasStoredToken() {
