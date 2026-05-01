@@ -604,6 +604,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     {'label': 'Need info', 'content': 'I need more information.', 'quickReply': '❓ Need info'},
   ];
   static const _reactions = ['👍', '🎯', '🔥', '✅'];
+  static final RegExp _mentionDraftPattern = RegExp(r'(^|\s)@([A-Za-z0-9._-]{0,64})$');
 
   @override
   void initState() {
@@ -839,11 +840,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                                       replyToId: _replyTarget?['id']?.toString() ?? '',
                                     );
                                     _messageController.clear();
+                                    _replyTarget = null;
+                                    _mentionQuery = null;
                                     if (!mounted) return;
-                                    setState(() {
-                                      _replyTarget = null;
-                                      _mentionQuery = null;
-                                    });
+                                    setState(() {});
                                   } catch (error) {
                                     if (!mounted) return;
                                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
@@ -884,7 +884,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     final selection = _messageController.selection;
     final cursor = selection.isValid && selection.baseOffset >= 0 ? selection.baseOffset : _messageController.text.length;
     final before = _messageController.text.substring(0, cursor);
-    final match = RegExp(r'(^|\s)@([A-Za-z0-9._-]{0,64})$').firstMatch(before);
+    final match = _mentionDraftPattern.firstMatch(before);
     final nextQuery = match?.group(2);
     if (nextQuery == _mentionQuery) return;
     setState(() => _mentionQuery = nextQuery);
@@ -895,7 +895,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     final cursor = selection.isValid && selection.baseOffset >= 0 ? selection.baseOffset : _messageController.text.length;
     final before = _messageController.text.substring(0, cursor);
     final after = _messageController.text.substring(cursor);
-    final match = RegExp(r'(^|\s)@([A-Za-z0-9._-]{0,64})$').firstMatch(before);
+    final match = _mentionDraftPattern.firstMatch(before);
     final start = match != null ? cursor - (match.group(2)?.length ?? 0) - 1 : cursor;
     final prefix = match != null ? _messageController.text.substring(0, start) : '${before}${before.endsWith(' ') || before.isEmpty ? '' : ' '}';
     final nextText = '$prefix@$username $after';

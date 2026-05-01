@@ -305,6 +305,7 @@ const quickReplies = [
 ]
 const reactionChoices = ['👍', '🎯', '🔥', '✅']
 const composerEmojis = ['😀', '👍', '🎉', '🤝', '🚀']
+const mentionDraftPattern = /(^|\s)@([A-Za-z0-9._-]{0,64})$/
 
 const route = useRoute()
 const router = useRouter()
@@ -624,7 +625,7 @@ function insertMention(username) {
   const cursor = typeof textarea?.selectionStart === 'number' ? textarea.selectionStart : messageDraft.value.length
   const before = messageDraft.value.slice(0, cursor)
   const after = messageDraft.value.slice(cursor)
-  const match = before.match(/(^|\s)@([A-Za-z0-9._-]{0,64})$/)
+  const match = before.match(mentionDraftPattern)
   const start = match ? cursor - match[2].length - 1 : cursor
   const prefix = match ? messageDraft.value.slice(0, start) : `${before}${before.endsWith(' ') || !before ? '' : ' '}`
   const nextValue = `${prefix}@${username} ${after}`
@@ -647,7 +648,7 @@ function syncMentionSuggestions() {
   const textarea = getComposerTextarea()
   const cursor = typeof textarea?.selectionStart === 'number' ? textarea.selectionStart : messageDraft.value.length
   const before = messageDraft.value.slice(0, cursor)
-  const match = before.match(/(^|\s)@([A-Za-z0-9._-]{0,64})$/)
+  const match = before.match(mentionDraftPattern)
   mentionQuery.value = match ? match[2] : null
 }
 
