@@ -175,7 +175,24 @@
                 </div>
                 <el-button text @click="replyTarget = null">Clear</el-button>
               </div>
-              <el-input v-model="messageDraft" type="textarea" :rows="5" placeholder="Type Markdown, mention teammates with @name, or send a quick reply" />
+              <el-input
+                ref="composerInputRef"
+                v-model="messageDraft"
+                type="textarea"
+                :rows="5"
+                placeholder="Type Markdown, mention teammates with @name, or send a quick reply"
+                @input="syncMentionSuggestions"
+                @click="syncMentionSuggestions"
+                @keyup="syncMentionSuggestions"
+              />
+              <div v-if="mentionSuggestions.length" class="mention-suggestions">
+                <span class="caption">Mention recipients</span>
+                <div class="chip-row">
+                  <el-button v-for="user in mentionSuggestions" :key="`mention-suggestion-${user}`" size="small" @click="insertMention(user)">
+                    @{{ user }}
+                  </el-button>
+                </div>
+              </div>
               <div class="composer-actions">
                 <div class="emoji-row">
                   <button v-for="emoji in composerEmojis" :key="emoji" class="emoji-chip" type="button" @click="appendEmoji(emoji)">{{ emoji }}</button>
@@ -288,6 +305,7 @@ const quickReplies = [
 ]
 const reactionChoices = ['👍', '🎯', '🔥', '✅']
 const composerEmojis = ['😀', '👍', '🎉', '🤝', '🚀']
+const mentionDraftPattern = /(^|\s)@([A-Za-z0-9._-]{0,64})$/
 
 const route = useRoute()
 const router = useRouter()
@@ -307,6 +325,7 @@ const unreadCount = ref(0)
 const lastReadMessageId = ref('')
 const attachmentInputRef = ref(null)
 const chatScrollRef = ref(null)
+const composerInputRef = ref(null)
 const buckets = ref([])
 const browserObjects = ref([])
 const selectedBucket = ref('')
@@ -325,6 +344,12 @@ const collaborationUrl = computed(() => `${window.location.origin}/collaboration
 const currentUsername = computed(() => session.value?.currentUsername || currentUser.value?.username || '')
 const allowedUsersWithCreator = computed(() => (session.value ? [session.value.creator, ...(session.value.allowedUsers || [])] : []))
 const mentionableUsers = computed(() => session.value?.mentionableUsers || allowedUsersWithCreator.value)
+const mentionQuery = ref(null)
+const mentionSuggestions = computed(() => {
+  if (mentionQuery.value === null) return []
+  const query = mentionQuery.value.trim().toLowerCase()
+  return mentionableUsers.value.filter((user) => user !== currentUsername.value && (!query || user.toLowerCase().includes(query)))
+})
 const canSendMessage = computed(() => Boolean(messageDraft.value.trim() || replyTarget.value))
 const firstUnreadIndex = computed(() => {
   if (!messages.value.length || unreadCount.value <= 0) return -1
@@ -422,7 +447,7 @@ async function handleRealtimeEvent(event) {
       messages.value = upsertMessage(payload)
       break
     case 'message.deleted':
-      if (payload.username === currentUsername.value) {
+      if (payload.deletedForAll || payload.username === currentUsername.value) {
         messages.value = messages.value.filter((item) => item.id !== payload.messageId)
       }
       break
@@ -508,6 +533,7 @@ async function sendMessage() {
       type: 'markdown'
     })
     messageDraft.value = ''
+    mentionQuery.value = null
     replyTarget.value = null
   } catch (error) {
     ElMessage.error(error.response?.data?.error || error.message)
@@ -595,11 +621,39 @@ function setReplyTarget(message) {
 }
 
 function insertMention(username) {
-  messageDraft.value = `${messageDraft.value}${messageDraft.value.endsWith(' ') || !messageDraft.value ? '' : ' '}@${username} `
+  const textarea = getComposerInputElement()
+  const cursor = typeof textarea?.selectionStart === 'number' ? textarea.selectionStart : messageDraft.value.length
+  const before = messageDraft.value.slice(0, cursor)
+  const after = messageDraft.value.slice(cursor)
+  const match = before.match(mentionDraftPattern)
+  const start = match ? cursor - match[2].length - 1 : cursor
+  const prefix = match ? messageDraft.value.slice(0, start) : `${before}${before.endsWith(' ') || !before ? '' : ' '}`
+  const nextValue = `${prefix}@${username} ${after}`
+  const nextCursor = `${prefix}@${username} `.length
+  messageDraft.value = nextValue
+  mentionQuery.value = null
+  nextTick(() => {
+    const input = getComposerInputElement()
+    if (!input) return
+    input.focus()
+    input.setSelectionRange(nextCursor, nextCursor)
+  })
 }
 
 function appendEmoji(emoji) {
   messageDraft.value = `${messageDraft.value}${emoji}`
+}
+
+function syncMentionSuggestions() {
+  const textarea = getComposerInputElement()
+  const cursor = typeof textarea?.selectionStart === 'number' ? textarea.selectionStart : messageDraft.value.length
+  const before = messageDraft.value.slice(0, cursor)
+  const match = before.match(mentionDraftPattern)
+  mentionQuery.value = match ? match[2] : null
+}
+
+function getComposerInputElement() {
+  return composerInputRef.value?.textarea || composerInputRef.value?.input || null
 }
 
 function extractMentionedUsers(content) {
@@ -958,7 +1012,7 @@ function normalizeRecognitionLanguage(value) {
 .eyebrow, .subtitle, .caption, .file-item p, .replying-banner p, .remote-video-item p { margin: 0; color: var(--kip-text-muted); }
 h1 { margin: 8px 0 12px; font-size: 36px; line-height: 1.1; }
 .hero-meta, .hero-action-row, .video-actions, .composer-actions, .file-actions, .chat-header-meta, .message-actions, .message-meta, .reaction-row, .chip-row, .composer-buttons, .emoji-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.hero-actions, .side-panel, .main-panel, .chat-card, .s3-browser, .composer, .file-list, .member-list, .remote-videos, .quick-tools { display: flex; flex-direction: column; gap: 14px; }
+.hero-actions, .side-panel, .main-panel, .chat-card, .s3-browser, .composer, .file-list, .member-list, .remote-videos, .quick-tools, .mention-suggestions { display: flex; flex-direction: column; gap: 14px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .chat-scroll { height: 520px; }
 .message-list { display: flex; flex-direction: column; gap: 14px; }
@@ -971,6 +1025,7 @@ h1 { margin: 8px 0 12px; font-size: 36px; line-height: 1.1; }
 .message-header, .member-item, .file-item, .browser-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .reply-preview, .replying-banner, .unread-marker { border: 1px solid var(--kip-border); background: rgba(237, 226, 210, 0.55); border-radius: 18px; padding: 10px 12px; }
 .quick-reply-pill { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: rgba(237, 226, 210, 0.85); color: var(--kip-text); font-size: 13px; font-weight: 600; }
+.mention-suggestions { padding: 12px 14px; border: 1px solid var(--kip-border); border-radius: 18px; background: rgba(237, 226, 210, 0.35); }
 .message-placeholder { font-style: italic; color: inherit; }
 .message-markdown :deep(p), .message-markdown :deep(ul), .message-markdown :deep(blockquote), .message-markdown :deep(h2), .message-markdown :deep(h3), .message-markdown :deep(h4) { margin: 10px 0 0; }
 .message-markdown :deep(ul) { padding-left: 20px; }

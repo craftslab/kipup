@@ -596,6 +596,7 @@ class WorkspaceScreen extends StatefulWidget {
 class _WorkspaceScreenState extends State<WorkspaceScreen> {
   final TextEditingController _messageController = TextEditingController();
   Map<String, dynamic>? _replyTarget;
+  String? _mentionQuery;
 
   static const _quickReplies = [
     {'label': 'Acknowledge', 'content': 'Acknowledged.', 'quickReply': '✅ Acknowledged'},
@@ -603,9 +604,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     {'label': 'Need info', 'content': 'I need more information.', 'quickReply': '❓ Need info'},
   ];
   static const _reactions = ['👍', '🎯', '🔥', '✅'];
+  static final RegExp _mentionDraftPattern = RegExp(r'(^|\s)@([A-Za-z0-9._-]{0,64})$');
+
+  @override
+  void initState() {
+    super.initState();
+    _messageController.addListener(_syncMentionSuggestions);
+  }
 
   @override
   void dispose() {
+    _messageController.removeListener(_syncMentionSuggestions);
     _messageController.dispose();
     super.dispose();
   }
@@ -687,19 +696,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: controller.mentionableUsers
-                            .map((user) => ActionChip(
-                                  label: Text('@$user'),
-                                  onPressed: () {
-                                    _messageController.text = '${_messageController.text}${_messageController.text.endsWith(' ') || _messageController.text.isEmpty ? '' : ' '}@$user ';
-                                    setState(() {});
-                                  },
-                                ))
-                            .toList(growable: false),
-                      ),
+                       Wrap(
+                         spacing: 8,
+                         runSpacing: 8,
+                         children: controller.mentionableUsers
+                             .map((user) => ActionChip(
+                                   label: Text('@$user'),
+                                   onPressed: () => _insertMention(user),
+                                 ))
+                             .toList(growable: false),
+                       ),
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
@@ -777,54 +783,78 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                             ),
                           ),
                         ),
-                      TextField(
-                        controller: _messageController,
-                        minLines: 3,
-                        maxLines: 6,
-                        decoration: const InputDecoration(
-                          labelText: 'Message',
-                          hintText: 'Type Markdown, mention teammates with @name, or send quick replies.',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          FilledButton(
-                            onPressed: () async {
-                              try {
-                                await controller.markCollaborationRead();
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Marked as read')));
-                              } catch (error) {
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
-                              }
-                            },
-                            child: const Text('Mark read'),
+                       TextField(
+                          controller: _messageController,
+                          minLines: 3,
+                          maxLines: 6,
+                          onTap: _syncMentionSuggestions,
+                          decoration: const InputDecoration(
+                           labelText: 'Message',
+                           hintText: 'Type Markdown, mention teammates with @name, or send quick replies.',
+                         ),
+                       ),
+                       if (_mentionSuggestions(controller).isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('Mention recipients', style: Theme.of(context).textTheme.bodySmall),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: FilledButton(
+                         const SizedBox(height: 8),
+                         Wrap(
+                           spacing: 8,
+                           runSpacing: 8,
+                           children: _mentionSuggestions(controller)
+                               .map(
+                                 (user) => ActionChip(
+                                   label: Text('@$user'),
+                                   onPressed: () => _insertMention(user),
+                                 ),
+                               )
+                               .toList(growable: false),
+                         ),
+                       ],
+                       const SizedBox(height: 12),
+                       Row(
+                          children: [
+                            FilledButton(
                               onPressed: () async {
-                                if (_messageController.text.trim().isEmpty && _replyTarget == null) return;
                                 try {
-                                  await controller.sendCollaborationMessage(
-                                    content: _messageController.text.trim(),
-                                    replyToId: _replyTarget?['id']?.toString() ?? '',
-                                  );
-                                  _messageController.clear();
+                                  await controller.markCollaborationRead();
                                   if (!mounted) return;
-                                  setState(() => _replyTarget = null);
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Marked as read')));
                                 } catch (error) {
                                   if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
                                 }
                               },
-                              child: const Text('Send'),
+                              child: const Text('Mark read'),
                             ),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: () async {
+                                  if (_messageController.text.trim().isEmpty && _replyTarget == null) return;
+                                  try {
+                                    await controller.sendCollaborationMessage(
+                                      content: _messageController.text.trim(),
+                                      replyToId: _replyTarget?['id']?.toString() ?? '',
+                                    );
+                                    _messageController.clear();
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _replyTarget = null;
+                                      _mentionQuery = null;
+                                    });
+                                  } catch (error) {
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
+                                  }
+                                },
+                                child: const Text('Send'),
+                              ),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -841,6 +871,41 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         ),
       ),
     );
+  }
+
+  List<String> _mentionSuggestions(KipupMobileController controller) {
+    final query = _mentionQuery?.trim().toLowerCase();
+    if (query == null) return const [];
+    return controller.mentionableUsers
+        .where((user) => user != controller.chatUsername && (query.isEmpty || user.toLowerCase().contains(query)))
+        .toList(growable: false);
+  }
+
+  void _syncMentionSuggestions() {
+    final selection = _messageController.selection;
+    final cursor = selection.isValid && selection.baseOffset >= 0 ? selection.baseOffset : _messageController.text.length;
+    final before = _messageController.text.substring(0, cursor);
+    final match = _mentionDraftPattern.firstMatch(before);
+    final nextQuery = match?.group(2);
+    if (nextQuery == _mentionQuery) return;
+    setState(() => _mentionQuery = nextQuery);
+  }
+
+  void _insertMention(String username) {
+    final selection = _messageController.selection;
+    final cursor = selection.isValid && selection.baseOffset >= 0 ? selection.baseOffset : _messageController.text.length;
+    final before = _messageController.text.substring(0, cursor);
+    final after = _messageController.text.substring(cursor);
+    final match = _mentionDraftPattern.firstMatch(before);
+    final start = match != null ? cursor - (match.group(2)?.length ?? 0) - 1 : cursor;
+    final prefix = match != null ? _messageController.text.substring(0, start) : '${before}${before.endsWith(' ') || before.isEmpty ? '' : ' '}';
+    final nextText = '$prefix@$username $after';
+    final nextCursor = '$prefix@$username '.length;
+    _messageController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextCursor),
+    );
+    setState(() => _mentionQuery = null);
   }
 }
 

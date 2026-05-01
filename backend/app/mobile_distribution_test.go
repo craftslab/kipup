@@ -171,7 +171,21 @@ func TestMobileCollaborationMessaging(t *testing.T) {
 	if _, err := service.ToggleMobileCollaborationReaction(installation.ActivationToken, installation.DeviceID, created.ID, "✅"); err != nil {
 		t.Fatalf("ToggleMobileCollaborationReaction() error = %v", err)
 	}
-	if _, _, data, err := service.ExportMobileCollaborationTranscript(installation.ActivationToken, installation.DeviceID, "txt"); err != nil || !strings.Contains(string(data), "hello from mobile") {
+	recalled, err := service.RecallMobileCollaborationMessage(installation.ActivationToken, installation.DeviceID, created.ID)
+	if err != nil {
+		t.Fatalf("RecallMobileCollaborationMessage() error = %v", err)
+	}
+	if recalled.Status != CollaborationMessageStatusRecalled {
+		t.Fatalf("expected recalled status, got %#v", recalled)
+	}
+	view, _, err = service.GetMobileCollaborationSession(installation.ActivationToken, installation.DeviceID)
+	if err != nil {
+		t.Fatalf("GetMobileCollaborationSession(post recall) error = %v", err)
+	}
+	if len(view.Messages) != 0 {
+		t.Fatalf("expected recalled mobile message to be removed, got %#v", view.Messages)
+	}
+	if _, _, data, err := service.ExportMobileCollaborationTranscript(installation.ActivationToken, installation.DeviceID, "txt"); err != nil || strings.Contains(string(data), "hello from mobile") {
 		t.Fatalf("ExportMobileCollaborationTranscript() error = %v data = %q", err, string(data))
 	}
 }

@@ -111,6 +111,20 @@ func TestCollaborationMessageLifecycle(t *testing.T) {
 	if recalled.Status != CollaborationMessageStatusRecalled {
 		t.Fatalf("expected recalled status, got %q", recalled.Status)
 	}
+	postRecallCreatorView, _, err := service.GetCollaborationSession(session.Token, creator)
+	if err != nil {
+		t.Fatalf("GetCollaborationSession(creator, post recall) error = %v", err)
+	}
+	if len(postRecallCreatorView.Messages) != 1 || postRecallCreatorView.Messages[0].ID != root.ID {
+		t.Fatalf("creator view should remove recalled message, got %#v", postRecallCreatorView.Messages)
+	}
+	postRecallMemberView, _, err := service.GetCollaborationSession(session.Token, member)
+	if err != nil {
+		t.Fatalf("GetCollaborationSession(member, post recall) error = %v", err)
+	}
+	if len(postRecallMemberView.Messages) != 1 || postRecallMemberView.Messages[0].ID != root.ID {
+		t.Fatalf("member view should remove recalled message, got %#v", postRecallMemberView.Messages)
+	}
 
 	deletion, err := service.DeleteCollaborationMessage(session.Token, creator, root.ID)
 	if err != nil {
@@ -124,7 +138,7 @@ func TestCollaborationMessageLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCollaborationSession(creator) error = %v", err)
 	}
-	if len(creatorView.Messages) != 1 || creatorView.Messages[0].ID != reply.ID {
+	if len(creatorView.Messages) != 0 {
 		t.Fatalf("creator view should hide deleted message, got %#v", creatorView.Messages)
 	}
 
@@ -132,11 +146,8 @@ func TestCollaborationMessageLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCollaborationSession(member) error = %v", err)
 	}
-	if len(memberView.Messages) != 2 {
-		t.Fatalf("member view should retain both messages, got %#v", memberView.Messages)
-	}
-	if memberView.Messages[1].Status != CollaborationMessageStatusRecalled {
-		t.Fatalf("expected recalled message in member view, got %#v", memberView.Messages[1])
+	if len(memberView.Messages) != 1 || memberView.Messages[0].ID != root.ID {
+		t.Fatalf("member view should retain undeleted message only, got %#v", memberView.Messages)
 	}
 }
 
