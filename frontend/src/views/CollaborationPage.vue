@@ -330,7 +330,7 @@ const firstUnreadIndex = computed(() => {
   if (!messages.value.length || unreadCount.value <= 0) return -1
   if (!lastReadMessageId.value) return Math.max(messages.value.length - unreadCount.value, 0)
   const index = messages.value.findIndex((item) => item.id === lastReadMessageId.value)
-  return index < 0 ? Math.max(messages.value.length - unreadCount.value, 0) : Math.min(index + 1, messages.value.length - 1)
+  return index < 0 ? Math.max(messages.value.length - unreadCount.value, 0) : index + 1
 })
 
 onMounted(async () => {
@@ -467,7 +467,7 @@ function isOwnMessage(message) {
 }
 
 function showUnreadMarker(index) {
-  return unreadCount.value > 0 && index === firstUnreadIndex.value
+  return unreadCount.value > 0 && firstUnreadIndex.value >= 0 && firstUnreadIndex.value < messages.value.length && index === firstUnreadIndex.value
 }
 
 async function saveSessionSettings() {

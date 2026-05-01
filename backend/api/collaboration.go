@@ -676,31 +676,7 @@ func collaborationMentionableUsers(session app.CollaborationSession) []string {
 }
 
 func collaborationUnreadState(session app.CollaborationSession, username string) (int, string) {
-	lastRead := ""
-	for _, state := range session.ReadStates {
-		if strings.EqualFold(state.Username, username) {
-			lastRead = state.LastReadMessageID
-			break
-		}
-	}
-	count := 0
-	seenLast := lastRead == ""
-	for _, message := range session.Messages {
-		if strings.EqualFold(message.Author, username) {
-			if message.ID == lastRead {
-				seenLast = true
-			}
-			continue
-		}
-		if !seenLast {
-			count++
-		}
-		if message.ID == lastRead {
-			seenLast = true
-			count = 0
-		}
-	}
-	return count, lastRead
+	return app.CollaborationUnreadState(session, username)
 }
 
 func collaborationMessageInput(req collaborationMessageRequest) app.CollaborationMessageInput {

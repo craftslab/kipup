@@ -108,6 +108,7 @@ class KipupMobileController extends ChangeNotifier {
   List<Map<String, dynamic>> collaborationMessages = const [];
 
   Timer? _pollTimer;
+  int _pollFailures = 0;
 
   Future<void> initialize() async {
     state = AppState.loading;
@@ -353,6 +354,7 @@ class KipupMobileController extends ChangeNotifier {
 
   Future<void> block(String reason) async {
     _pollTimer?.cancel();
+    _pollFailures = 0;
     blockingReason = reason;
     state = AppState.blocked;
     final prefs = await SharedPreferences.getInstance();
@@ -376,6 +378,7 @@ class KipupMobileController extends ChangeNotifier {
 
   Future<void> reset() async {
     _pollTimer?.cancel();
+    _pollFailures = 0;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_prefsActivationToken);
     await prefs.remove(_prefsActivationCode);
@@ -407,9 +410,27 @@ class KipupMobileController extends ChangeNotifier {
   void _startPolling() {
     _pollTimer?.cancel();
     if (collaborationToken.isEmpty) return;
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      unawaited(loadCollaborationSession(silent: true));
+    _scheduleNextPoll();
+  }
+
+  void _scheduleNextPoll() {
+    _pollTimer?.cancel();
+    if (collaborationToken.isEmpty) return;
+    final delaySeconds = _pollFailures <= 0 ? 5 : min(30, 5 * (_pollFailures + 1));
+    _pollTimer = Timer(Duration(seconds: delaySeconds), () {
+      unawaited(_pollCollaborationSession());
     });
+  }
+
+  Future<void> _pollCollaborationSession() async {
+    try {
+      await loadCollaborationSession(silent: true);
+      _pollFailures = 0;
+    } catch (_) {
+      _pollFailures++;
+    } finally {
+      _scheduleNextPoll();
+    }
   }
 
   List<String> _extractMentions(String content) {

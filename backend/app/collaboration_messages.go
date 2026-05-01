@@ -125,6 +125,7 @@ func (s *Service) addCollaborationMessage(token string, actor CollaborationActor
 		session.Messages = append(session.Messages, created)
 		if len(session.Messages) > maxCollaborationMessages {
 			session.Messages = session.Messages[len(session.Messages)-maxCollaborationMessages:]
+			pruneCollaborationReadStates(session)
 		}
 		updateCollaborationReadState(session, actor.Username, created.ID, now)
 		session.UpdatedAt = now
@@ -412,8 +413,9 @@ func summarizeCollaborationContent(content, quickReply string) string {
 	}
 	summary = markdownTokenPattern.ReplaceAllString(summary, "")
 	summary = strings.Join(strings.Fields(summary), " ")
-	if len(summary) > 120 {
-		summary = summary[:120]
+	runes := []rune(summary)
+	if len(runes) > 120 {
+		summary = string(runes[:117]) + "..."
 	}
 	return summary
 }
@@ -516,6 +518,11 @@ func updateSingleMessageRead(message *CollaborationMessage, username string, rea
 }
 
 func collaborationUnreadCount(session CollaborationSession, username string) int {
+	count, _ := CollaborationUnreadState(session, username)
+	return count
+}
+
+func CollaborationUnreadState(session CollaborationSession, username string) (int, string) {
 	lastRead := ""
 	for _, state := range session.ReadStates {
 		if sameUsername(state.Username, username) {
@@ -523,32 +530,48 @@ func collaborationUnreadCount(session CollaborationSession, username string) int
 			break
 		}
 	}
-	count := 0
-	seenLast := lastRead == ""
-	for _, message := range session.Messages {
-		if collaborationMessageDeletedFor(message, username) || sameUsername(message.Author, username) {
-			if message.ID == lastRead {
-				seenLast = true
-			}
-			continue
-		}
-		if !seenLast {
-			count++
-		}
-		if message.ID == lastRead {
-			seenLast = true
-			count = 0
-		}
-	}
 	if lastRead == "" {
-		count = 0
+		count := 0
 		for _, message := range session.Messages {
 			if !collaborationMessageDeletedFor(message, username) && !sameUsername(message.Author, username) {
 				count++
 			}
 		}
+		return count, lastRead
 	}
-	return count
+	count := 0
+	seenLast := false
+	for _, message := range session.Messages {
+		if message.ID == lastRead {
+			seenLast = true
+			continue
+		}
+		if !seenLast || collaborationMessageDeletedFor(message, username) || sameUsername(message.Author, username) {
+			continue
+		}
+		count++
+	}
+	return count, lastRead
+}
+
+func pruneCollaborationReadStates(session *CollaborationSession) {
+	if len(session.ReadStates) == 0 || len(session.Messages) == 0 {
+		return
+	}
+	validIDs := make(map[string]struct{}, len(session.Messages))
+	oldestID := session.Messages[0].ID
+	for _, message := range session.Messages {
+		validIDs[message.ID] = struct{}{}
+	}
+	for i := range session.ReadStates {
+		lastReadID := session.ReadStates[i].LastReadMessageID
+		if lastReadID == "" {
+			continue
+		}
+		if _, ok := validIDs[lastReadID]; !ok {
+			session.ReadStates[i].LastReadMessageID = oldestID
+		}
+	}
 }
 
 func toggleCollaborationReactionUsers(message *CollaborationMessage, emoji, username string) {
@@ -748,7 +771,7 @@ func mobileCollaborationUsername(installation MobileAppInstallation) string {
 		label = "device"
 	}
 	if len(label) > 24 {
-		label = label[:24]
+		label = label[:21] + "..."
 	}
 	return "mobile-" + label
 }
