@@ -41,12 +41,19 @@ func visibleCollaborationMessages(messages []CollaborationMessage, username stri
 	}
 	visible := make([]CollaborationMessage, 0, len(messages))
 	for _, message := range messages {
-		if collaborationMessageDeletedFor(message, username) {
+		if collaborationMessageHiddenFor(message, username) {
 			continue
 		}
 		visible = append(visible, sanitizeCollaborationMessage(message))
 	}
 	return visible
+}
+
+func collaborationMessageHiddenFor(message CollaborationMessage, username string) bool {
+	if message.Status == CollaborationMessageStatusRecalled {
+		return true
+	}
+	return collaborationMessageDeletedFor(message, username)
 }
 
 func collaborationMessageDeletedFor(message CollaborationMessage, username string) bool {
@@ -206,7 +213,7 @@ func (s *Service) toggleCollaborationReaction(token string, actor CollaborationA
 			return ErrCollaborationMessageNotFound
 		}
 		message := &session.Messages[messageIndex]
-		if collaborationMessageDeletedFor(*message, actor.Username) {
+		if collaborationMessageHiddenFor(*message, actor.Username) {
 			return ErrCollaborationMessageNotFound
 		}
 		if message.Status == CollaborationMessageStatusRecalled {
@@ -231,6 +238,11 @@ func (s *Service) RecallCollaborationMessage(token string, user User, messageID 
 func (s *Service) recallCollaborationMessage(token string, actor CollaborationActor, messageID string) (CollaborationMessage, error) {
 	now := time.Now().UTC()
 	var updated CollaborationMessage
+	event := CollaborationDeletionEvent{
+		MessageID:     strings.TrimSpace(messageID),
+		Username:      actor.Username,
+		DeletedForAll: true,
+	}
 	if err := s.store.update(func(state *State) error {
 		index, err := findCollaborationSessionIndex(state.CollaborationSessions, token)
 		if err != nil {
@@ -248,22 +260,24 @@ func (s *Service) recallCollaborationMessage(token string, actor CollaborationAc
 		if !sameUsername(message.Author, actor.Username) {
 			return ErrCollaborationMessageAuthorOnly
 		}
-		message.Status = CollaborationMessageStatusRecalled
-		message.Content = ""
-		message.Summary = "Message recalled"
-		message.Mentions = nil
-		message.Reactions = nil
-		message.QuickReply = ""
-		message.RecalledAt = &now
-		message.RecalledBy = actor.Username
-		message.UpdatedAt = now
-		session.UpdatedAt = now
 		updated = sanitizeCollaborationMessage(*message)
+		updated.Status = CollaborationMessageStatusRecalled
+		updated.Content = ""
+		updated.Summary = "Message recalled"
+		updated.Mentions = nil
+		updated.Reactions = nil
+		updated.QuickReply = ""
+		updated.RecalledAt = &now
+		updated.RecalledBy = actor.Username
+		updated.UpdatedAt = now
+		session.Messages = append(session.Messages[:messageIndex], session.Messages[messageIndex+1:]...)
+		pruneCollaborationReadStates(session)
+		session.UpdatedAt = now
 		return nil
 	}); err != nil {
 		return CollaborationMessage{}, err
 	}
-	s.hub.publish(token, CollaborationRealtimeEvent{Type: "message.recalled", Payload: updated, CreatedAt: now})
+	s.hub.publish(token, CollaborationRealtimeEvent{Type: "message.deleted", Payload: event, CreatedAt: now})
 	return updated, nil
 }
 
@@ -400,7 +414,7 @@ func buildCollaborationReplyRef(messages []CollaborationMessage, replyToID, user
 		return nil, ErrCollaborationMessageNotFound
 	}
 	message := messages[index]
-	if collaborationMessageDeletedFor(message, username) {
+	if collaborationMessageHiddenFor(message, username) {
 		return nil, ErrCollaborationMessageNotFound
 	}
 	return &CollaborationMessageRef{
@@ -468,7 +482,7 @@ func findCollaborationMessageIndex(messages []CollaborationMessage, messageID st
 
 func latestVisibleMessageID(messages []CollaborationMessage, username string) string {
 	for i := len(messages) - 1; i >= 0; i-- {
-		if !collaborationMessageDeletedFor(messages[i], username) {
+		if !collaborationMessageHiddenFor(messages[i], username) {
 			return messages[i].ID
 		}
 	}
@@ -538,7 +552,7 @@ func CollaborationUnreadState(session CollaborationSession, username string) (in
 	if lastRead == "" {
 		count := 0
 		for _, message := range session.Messages {
-			if !collaborationMessageDeletedFor(message, username) && !sameUsername(message.Author, username) {
+			if !collaborationMessageHiddenFor(message, username) && !sameUsername(message.Author, username) {
 				count++
 			}
 		}
@@ -551,7 +565,7 @@ func CollaborationUnreadState(session CollaborationSession, username string) (in
 			seenLast = true
 			continue
 		}
-		if !seenLast || collaborationMessageDeletedFor(message, username) || sameUsername(message.Author, username) {
+		if !seenLast || collaborationMessageHiddenFor(message, username) || sameUsername(message.Author, username) {
 			continue
 		}
 		count++

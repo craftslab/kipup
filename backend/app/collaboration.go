@@ -161,17 +161,18 @@ type CollaborationReadEvent struct {
 }
 
 type CollaborationDeletionEvent struct {
-	MessageID string `json:"messageId"`
-	Username  string `json:"username"`
+	MessageID     string `json:"messageId"`
+	Username      string `json:"username"`
+	DeletedForAll bool   `json:"deletedForAll,omitempty"`
 }
 
 type CollaborationExportSnapshot struct {
-	Session     CollaborationSession  `json:"session"`
-	Messages    []CollaborationMessage `json:"messages"`
+	Session     CollaborationSession      `json:"session"`
+	Messages    []CollaborationMessage    `json:"messages"`
 	Attachments []CollaborationAttachment `json:"attachments"`
-	SharedFiles []CollaborationFileRef `json:"sharedFiles"`
-	ExportedAt  time.Time `json:"exportedAt"`
-	ExportedBy  string `json:"exportedBy"`
+	SharedFiles []CollaborationFileRef    `json:"sharedFiles"`
+	ExportedAt  time.Time                 `json:"exportedAt"`
+	ExportedBy  string                    `json:"exportedBy"`
 }
 
 var mentionPattern = regexp.MustCompile(`(^|[\s\(\[\{>])@([A-Za-z0-9._-]{3,64})`)
