@@ -621,7 +621,7 @@ function setReplyTarget(message) {
 }
 
 function insertMention(username) {
-  const textarea = getComposerTextarea()
+  const textarea = getComposerInputElement()
   const cursor = typeof textarea?.selectionStart === 'number' ? textarea.selectionStart : messageDraft.value.length
   const before = messageDraft.value.slice(0, cursor)
   const after = messageDraft.value.slice(cursor)
@@ -633,7 +633,7 @@ function insertMention(username) {
   messageDraft.value = nextValue
   mentionQuery.value = null
   nextTick(() => {
-    const input = getComposerTextarea()
+    const input = getComposerInputElement()
     if (!input) return
     input.focus()
     input.setSelectionRange(nextCursor, nextCursor)
@@ -645,14 +645,14 @@ function appendEmoji(emoji) {
 }
 
 function syncMentionSuggestions() {
-  const textarea = getComposerTextarea()
+  const textarea = getComposerInputElement()
   const cursor = typeof textarea?.selectionStart === 'number' ? textarea.selectionStart : messageDraft.value.length
   const before = messageDraft.value.slice(0, cursor)
   const match = before.match(mentionDraftPattern)
   mentionQuery.value = match ? match[2] : null
 }
 
-function getComposerTextarea() {
+function getComposerInputElement() {
   return composerInputRef.value?.textarea || composerInputRef.value?.input || null
 }
 

@@ -840,11 +840,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                                       replyToId: _replyTarget?['id']?.toString() ?? '',
                                     );
                                     _messageController.clear();
-                                    if (!mounted) {
-                                      _replyTarget = null;
-                                      _mentionQuery = null;
-                                      return;
-                                    }
+                                    if (!mounted) return;
                                     setState(() {
                                       _replyTarget = null;
                                       _mentionQuery = null;
