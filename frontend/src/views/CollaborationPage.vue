@@ -307,6 +307,7 @@ const quickReplies = [
 const reactionChoices = ['👍', '🎯', '🔥', '✅']
 const composerEmojis = ['😀', '👍', '🎉', '🤝', '🚀']
 const mentionDraftPattern = /(^|\s)@([A-Za-z0-9._-]{0,64})$/
+const LOCAL_MESSAGE_AUTHOR_FALLBACK = 'You'
 const MIN_RECONNECT_DELAY_MS = 1500
 const RECONNECT_STEP_DELAY_MS = 2000
 const MAX_RECONNECT_DELAY_MS = 15000
@@ -813,10 +814,10 @@ function renderMessage(message) {
 function createPendingMessage({ content, quickReply, replyTo, type }) {
   const now = new Date().toISOString()
   return {
-    id: newLocalMessageID(),
+    id: newLocalMessageId(),
     type,
     status: 'sent',
-    author: currentUsername.value || currentUser.value?.username || 'You',
+    author: currentUsername.value || currentUser.value?.username || LOCAL_MESSAGE_AUTHOR_FALLBACK,
     content,
     summary: content || quickReply,
     mentions: extractMentionedUsers(content),
@@ -829,7 +830,7 @@ function createPendingMessage({ content, quickReply, replyTo, type }) {
   }
 }
 
-function newLocalMessageID() {
+function newLocalMessageId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `local-message-${crypto.randomUUID()}`
   }
@@ -1200,9 +1201,13 @@ h1 { margin: 8px 0 12px; font-size: 36px; line-height: 1.1; }
 .hero-meta, .hero-action-row, .video-actions, .composer-actions, .file-actions, .chat-header-meta, .message-actions, .message-meta, .reaction-row, .chip-row, .composer-buttons, .emoji-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .hero-actions, .side-panel, .main-panel, .chat-card, .s3-browser, .composer, .file-list, .member-list, .remote-videos, .quick-tools, .mention-suggestions { display: flex; flex-direction: column; gap: 14px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.chat-scroll { height: 520px; border-radius: 24px; background:
-  radial-gradient(circle at top left, rgba(42, 171, 238, 0.06), transparent 32%),
-  linear-gradient(180deg, rgba(244, 247, 251, 0.96), rgba(239, 244, 249, 0.96)); }
+.chat-scroll {
+  height: 520px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(42, 171, 238, 0.06), transparent 32%),
+    linear-gradient(180deg, rgba(244, 247, 251, 0.96), rgba(239, 244, 249, 0.96));
+}
 .message-list { display: flex; flex-direction: column; gap: 10px; padding: 18px 16px; }
 .message-row { display: flex; align-items: flex-end; }
 .message-row.is-own { justify-content: flex-end; }
