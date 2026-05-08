@@ -90,7 +90,7 @@
               <div class="card-header">
                 <span>Chat</span>
                 <div class="chat-header-meta">
-                  <span class="caption">Markdown · reply · reactions</span>
+                  <span class="caption">{{ streamStatusLabel }} · Markdown · reply · reactions</span>
                   <el-badge :value="unreadCount" :hidden="!unreadCount">
                     <span class="caption">Unread</span>
                   </el-badge>
@@ -113,18 +113,19 @@
             </div>
 
             <el-scrollbar ref="chatScrollRef" class="chat-scroll">
-              <div v-if="messages.length" class="message-list">
-                <template v-for="(message, index) in messages" :key="message.id">
+              <div v-if="chatMessages.length" class="message-list">
+                <template v-for="(message, index) in chatMessages" :key="message.id">
                   <div v-if="showUnreadMarker(index)" class="unread-marker">
                     <span>{{ unreadCount }} unread message<span v-if="unreadCount !== 1">s</span></span>
                     <el-button size="small" text @click="markLatestRead">Mark read</el-button>
                   </div>
-                  <article :class="['message-row', isOwnMessage(message) ? 'is-own' : 'is-other']">
-                    <div :class="['message-bubble', message.status === 'recalled' ? 'is-recalled' : '']">
+                  <article :class="['message-row', isOwnMessage(message) ? 'is-own' : 'is-other', message.localState ? 'is-pending' : '']">
+                    <div :class="['message-bubble', message.status === 'recalled' ? 'is-recalled' : '', message.localState ? 'is-pending' : '']">
                       <header class="message-header">
                         <strong>{{ message.author }}</strong>
                         <div class="message-meta">
                           <span>{{ formatDate(message.createdAt) }}</span>
+                          <span v-if="message.localState === 'sending'" class="message-state">Sending…</span>
                           <el-tag v-if="message.type === 'quick_reply'" size="small" type="success">Quick reply</el-tag>
                           <el-tag v-if="message.status === 'recalled'" size="small" type="warning">Recalled</el-tag>
                         </div>
@@ -326,6 +327,7 @@ const lastReadMessageId = ref('')
 const attachmentInputRef = ref(null)
 const chatScrollRef = ref(null)
 const composerInputRef = ref(null)
+const pendingMessages = ref([])
 const buckets = ref([])
 const browserObjects = ref([])
 const selectedBucket = ref('')
@@ -333,9 +335,16 @@ const selectedPrefix = ref('')
 const localVideoRef = ref(null)
 const localStream = ref(null)
 const remoteStreams = ref([])
+const streamStatus = ref('idle')
 
 let speechRecognition = null
 let eventSource = null
+let reconnectTimer = null
+let sessionSyncTimer = null
+let sessionSyncInFlight = false
+let reconnectAttempts = 0
+let streamConnectionVersion = 0
+let localMessageCounter = 0
 const peerConnections = new Map()
 
 const token = computed(() => route.params.token)
@@ -351,6 +360,19 @@ const mentionSuggestions = computed(() => {
   return mentionableUsers.value.filter((user) => user !== currentUsername.value && (!query || user.toLowerCase().includes(query)))
 })
 const canSendMessage = computed(() => Boolean(messageDraft.value.trim() || replyTarget.value))
+const chatMessages = computed(() => sortMessages([...messages.value, ...pendingMessages.value]))
+const streamStatusLabel = computed(() => {
+  switch (streamStatus.value) {
+    case 'connected':
+      return 'Live sync'
+    case 'reconnecting':
+      return 'Reconnecting'
+    case 'connecting':
+      return 'Connecting'
+    default:
+      return 'Offline sync'
+  }
+})
 const firstUnreadIndex = computed(() => {
   if (!messages.value.length || unreadCount.value <= 0) return -1
   if (!lastReadMessageId.value) return Math.max(messages.value.length - unreadCount.value, 0)
@@ -363,7 +385,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  disconnectStream()
+  disconnectStream({ resetState: true })
+  clearReconnectTimer()
+  stopSessionSyncPolling()
   stopVoiceRecognition()
   stopVideo()
 })
@@ -375,14 +399,18 @@ async function refreshSession() {
   try {
     const { data } = await getCollaborationSession(token.value)
     applySession(data)
-    await connectStream()
     if (!selectedBucket.value) {
       selectedBucket.value = data.bucket || ''
       selectedPrefix.value = data.prefix || ''
     }
     if (selectedBucket.value) await loadBrowserObjects()
+    try {
+      await connectStream({ notifyFailure: true })
+    } catch {
+      startSessionSyncPolling()
+    }
     await nextTick()
-    scrollChatToBottom()
+    scrollChatToBottom(false)
   } catch (error) {
     ElMessage.error(error.response?.data?.error || error.message)
     session.value = null
@@ -402,23 +430,98 @@ function applySession(data) {
   lastReadMessageId.value = data.lastReadMessageId || ''
 }
 
-async function connectStream() {
+async function connectStream({ notifyFailure = false } = {}) {
   disconnectStream()
-  const { data } = await createCollaborationStreamToken(token.value)
-  eventSource = new EventSource(`/api/v1/collaboration/sessions/${encodeURIComponent(token.value)}/stream?streamToken=${encodeURIComponent(data.streamToken)}`)
-  eventSource.addEventListener('update', async (event) => {
-    const payload = JSON.parse(event.data)
-    await handleRealtimeEvent(payload)
-  })
-  eventSource.onerror = () => {
-    if (eventSource?.readyState === EventSource.CLOSED) disconnectStream()
+  clearReconnectTimer()
+  const connectionVersion = ++streamConnectionVersion
+  streamStatus.value = reconnectAttempts > 0 ? 'reconnecting' : 'connecting'
+  try {
+    const { data } = await createCollaborationStreamToken(token.value)
+    if (connectionVersion !== streamConnectionVersion) return
+    const source = new EventSource(`/api/v1/collaboration/sessions/${encodeURIComponent(token.value)}/stream?streamToken=${encodeURIComponent(data.streamToken)}`)
+    eventSource = source
+    source.onopen = () => {
+      if (eventSource !== source) return
+      reconnectAttempts = 0
+      streamStatus.value = 'connected'
+      stopSessionSyncPolling()
+    }
+    source.addEventListener('update', async (event) => {
+      if (eventSource !== source) return
+      const payload = JSON.parse(event.data)
+      await handleRealtimeEvent(payload)
+    })
+    source.onerror = () => {
+      if (eventSource !== source) return
+      handleStreamDisconnect()
+    }
+  } catch (error) {
+    handleStreamDisconnect()
+    if (notifyFailure) ElMessage.warning('Live updates are reconnecting in the background.')
+    throw error
   }
 }
 
-function disconnectStream() {
-  if (!eventSource) return
-  eventSource.close()
-  eventSource = null
+function handleStreamDisconnect() {
+  disconnectStream()
+  streamStatus.value = 'reconnecting'
+  startSessionSyncPolling()
+  scheduleStreamReconnect()
+}
+
+function disconnectStream({ resetState = false } = {}) {
+  if (eventSource) {
+    const source = eventSource
+    eventSource = null
+    source.close()
+  }
+  if (resetState) streamStatus.value = 'idle'
+}
+
+function scheduleStreamReconnect() {
+  if (reconnectTimer || !token.value) return
+  reconnectAttempts += 1
+  const delay = Math.min(15000, Math.max(1500, reconnectAttempts * 2000))
+  reconnectTimer = window.setTimeout(async () => {
+    reconnectTimer = null
+    try {
+      await connectStream()
+    } catch {
+      // Silent background retry.
+    }
+  }, delay)
+}
+
+function clearReconnectTimer() {
+  if (!reconnectTimer) return
+  window.clearTimeout(reconnectTimer)
+  reconnectTimer = null
+}
+
+function startSessionSyncPolling() {
+  if (sessionSyncTimer) return
+  sessionSyncTimer = window.setInterval(() => {
+    if (streamStatus.value === 'connected' || sessionSyncInFlight || !token.value) return
+    void syncSessionState()
+  }, 5000)
+}
+
+function stopSessionSyncPolling() {
+  if (!sessionSyncTimer) return
+  window.clearInterval(sessionSyncTimer)
+  sessionSyncTimer = null
+}
+
+async function syncSessionState() {
+  sessionSyncInFlight = true
+  try {
+    const { data } = await getCollaborationSession(token.value)
+    applySession(data)
+  } catch {
+    // Ignore transient polling failures while the realtime stream reconnects.
+  } finally {
+    sessionSyncInFlight = false
+  }
 }
 
 async function handleRealtimeEvent(event) {
@@ -437,6 +540,7 @@ async function handleRealtimeEvent(event) {
       await router.replace({ name: 'browser' })
       break
     case 'message.created':
+      reconcilePendingMessage(payload)
       messages.value = upsertMessage(payload)
       if (!isOwnAuthor(payload.author)) unreadCount.value += 1
       await nextTick()
@@ -478,9 +582,11 @@ async function handleRealtimeEvent(event) {
 }
 
 function upsertMessage(message) {
-  return [...messages.value.filter((item) => item.id !== message.id), message].sort(
-    (left, right) => new Date(left.createdAt) - new Date(right.createdAt)
-  )
+  return sortMessages([...messages.value.filter((item) => item.id !== message.id), message])
+}
+
+function sortMessages(items) {
+  return items.slice().sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt))
 }
 
 function isOwnAuthor(author) {
@@ -525,32 +631,66 @@ async function closeSessionAction() {
 async function sendMessage() {
   const content = messageDraft.value.trim()
   if (!content && !replyTarget.value) return
+  const currentReplyTarget = replyTarget.value
+  const pending = createPendingMessage({
+    content,
+    quickReply: '',
+    replyTo: currentReplyTarget,
+    type: 'markdown'
+  })
+  pendingMessages.value = sortMessages([...pendingMessages.value, pending])
+  messageDraft.value = ''
+  mentionQuery.value = null
+  replyTarget.value = null
+  await nextTick()
+  scrollChatToBottom()
   try {
-    await createCollaborationMessage(token.value, {
+    const { data } = await createCollaborationMessage(token.value, {
       content,
-      replyToId: replyTarget.value?.id || '',
+      replyToId: currentReplyTarget?.id || '',
       mentionedUsers: extractMentionedUsers(content),
       type: 'markdown'
     })
-    messageDraft.value = ''
-    mentionQuery.value = null
-    replyTarget.value = null
+    pendingMessages.value = pendingMessages.value.filter((item) => item.id !== pending.id)
+    messages.value = upsertMessage(data)
+    await nextTick()
+    scrollChatToBottom()
   } catch (error) {
+    pendingMessages.value = pendingMessages.value.filter((item) => item.id !== pending.id)
+    messageDraft.value = content
+    replyTarget.value = currentReplyTarget
+    syncMentionSuggestions()
     ElMessage.error(error.response?.data?.error || error.message)
   }
 }
 
 async function sendQuickReply(preset) {
+  const currentReplyTarget = replyTarget.value
+  const pending = createPendingMessage({
+    content: preset.content,
+    quickReply: preset.quickReply,
+    replyTo: currentReplyTarget,
+    type: 'quick_reply'
+  })
+  pendingMessages.value = sortMessages([...pendingMessages.value, pending])
+  replyTarget.value = null
+  await nextTick()
+  scrollChatToBottom()
   try {
-    await createCollaborationMessage(token.value, {
+    const { data } = await createCollaborationMessage(token.value, {
       content: preset.content,
       quickReply: preset.quickReply,
-      replyToId: replyTarget.value?.id || '',
+      replyToId: currentReplyTarget?.id || '',
       mentionedUsers: extractMentionedUsers(preset.content),
       type: 'quick_reply'
     })
-    replyTarget.value = null
+    pendingMessages.value = pendingMessages.value.filter((item) => item.id !== pending.id)
+    messages.value = upsertMessage(data)
+    await nextTick()
+    scrollChatToBottom()
   } catch (error) {
+    pendingMessages.value = pendingMessages.value.filter((item) => item.id !== pending.id)
+    replyTarget.value = currentReplyTarget
     ElMessage.error(error.response?.data?.error || error.message)
   }
 }
@@ -664,6 +804,38 @@ function renderMessage(message) {
   const source = message.content || ''
   const sections = source.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean)
   return sections.map(renderBlock).join('')
+}
+
+function createPendingMessage({ content, quickReply, replyTo, type }) {
+  const now = new Date().toISOString()
+  return {
+    id: `local-message-${Date.now()}-${localMessageCounter++}`,
+    type,
+    status: 'sent',
+    author: currentUsername.value || currentUser.value?.username || 'You',
+    content,
+    summary: content || quickReply,
+    mentions: extractMentionedUsers(content),
+    replyTo: replyTo ? { ...replyTo } : null,
+    quickReply,
+    reactions: [],
+    createdAt: now,
+    updatedAt: now,
+    localState: 'sending'
+  }
+}
+
+function reconcilePendingMessage(message) {
+  if (!isOwnAuthor(message.author) || !pendingMessages.value.length) return
+  const nextIndex = pendingMessages.value.findIndex(
+    (item) =>
+      item.author === message.author &&
+      item.content === message.content &&
+      (item.quickReply || '') === (message.quickReply || '') &&
+      (item.replyTo?.id || '') === (message.replyTo?.id || '')
+  )
+  if (nextIndex < 0) return
+  pendingMessages.value = pendingMessages.value.filter((_, index) => index !== nextIndex)
 }
 
 function renderBlock(block) {
@@ -834,9 +1006,11 @@ async function downloadAuthorized(url, filename) {
   }
 }
 
-function scrollChatToBottom() {
+function scrollChatToBottom(smooth = true) {
   const wrap = chatScrollRef.value?.wrapRef
-  if (wrap) wrap.scrollTop = wrap.scrollHeight
+  if (wrap) {
+    wrap.scrollTo({ top: wrap.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+  }
 }
 
 async function startVideo() {
@@ -1014,26 +1188,38 @@ h1 { margin: 8px 0 12px; font-size: 36px; line-height: 1.1; }
 .hero-meta, .hero-action-row, .video-actions, .composer-actions, .file-actions, .chat-header-meta, .message-actions, .message-meta, .reaction-row, .chip-row, .composer-buttons, .emoji-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .hero-actions, .side-panel, .main-panel, .chat-card, .s3-browser, .composer, .file-list, .member-list, .remote-videos, .quick-tools, .mention-suggestions { display: flex; flex-direction: column; gap: 14px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.chat-scroll { height: 520px; }
-.message-list { display: flex; flex-direction: column; gap: 14px; }
-.message-row { display: flex; }
+.chat-scroll { height: 520px; border-radius: 24px; background:
+  radial-gradient(circle at top left, rgba(42, 171, 238, 0.06), transparent 32%),
+  linear-gradient(180deg, rgba(244, 247, 251, 0.96), rgba(239, 244, 249, 0.96)); }
+.message-list { display: flex; flex-direction: column; gap: 10px; padding: 18px 16px; }
+.message-row { display: flex; align-items: flex-end; }
 .message-row.is-own { justify-content: flex-end; }
-.message-bubble { max-width: min(78%, 720px); padding: 14px 16px; border-radius: 24px; border: 1px solid var(--kip-border); background: rgba(255, 252, 245, 0.88); box-shadow: 0 18px 40px rgba(59, 43, 31, 0.06); }
-.message-row.is-own .message-bubble { background: rgba(32, 25, 18, 0.92); color: #f9f3ea; }
+.message-bubble { position: relative; max-width: min(72%, 680px); padding: 12px 14px; border-radius: 18px; border: 1px solid rgba(111, 128, 150, 0.18); background: rgba(255, 255, 255, 0.96); box-shadow: 0 8px 24px rgba(31, 52, 77, 0.08); }
+.message-row.is-other .message-bubble { border-bottom-left-radius: 6px; }
+.message-row.is-own .message-bubble { border-color: transparent; border-bottom-right-radius: 6px; background: linear-gradient(180deg, #2aabee 0%, #229ed9 100%); color: #fff; box-shadow: 0 10px 24px rgba(42, 171, 238, 0.24); }
+.message-bubble::before { content: ''; position: absolute; bottom: 0; width: 12px; height: 14px; background: inherit; }
+.message-row.is-other .message-bubble::before { left: -6px; clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+.message-row.is-own .message-bubble::before { right: -6px; clip-path: polygon(0 0, 100% 100%, 0 100%); }
 .message-row.is-own .message-bubble :deep(a), .message-row.is-own .message-bubble :deep(code), .message-row.is-own .message-bubble :deep(blockquote), .message-row.is-own .message-bubble :deep(.mention) { color: inherit; }
 .message-bubble.is-recalled { opacity: 0.82; }
+.message-bubble.is-pending { opacity: 0.78; }
 .message-header, .member-item, .file-item, .browser-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-.reply-preview, .replying-banner, .unread-marker { border: 1px solid var(--kip-border); background: rgba(237, 226, 210, 0.55); border-radius: 18px; padding: 10px 12px; }
+.message-header { align-items: flex-start; }
+.message-meta { font-size: 12px; color: inherit; opacity: 0.8; }
+.message-state { font-weight: 600; }
+.reply-preview, .replying-banner, .unread-marker { border: 1px solid rgba(111, 128, 150, 0.16); background: rgba(255, 255, 255, 0.88); border-radius: 16px; padding: 10px 12px; }
 .quick-reply-pill { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: rgba(237, 226, 210, 0.85); color: var(--kip-text); font-size: 13px; font-weight: 600; }
 .mention-suggestions { padding: 12px 14px; border: 1px solid var(--kip-border); border-radius: 18px; background: rgba(237, 226, 210, 0.35); }
 .message-placeholder { font-style: italic; color: inherit; }
-.message-markdown :deep(p), .message-markdown :deep(ul), .message-markdown :deep(blockquote), .message-markdown :deep(h2), .message-markdown :deep(h3), .message-markdown :deep(h4) { margin: 10px 0 0; }
+.message-markdown { font-size: 14px; line-height: 1.65; letter-spacing: 0.01em; }
+.message-markdown :deep(p), .message-markdown :deep(ul), .message-markdown :deep(blockquote), .message-markdown :deep(h2), .message-markdown :deep(h3), .message-markdown :deep(h4) { margin: 8px 0 0; }
 .message-markdown :deep(ul) { padding-left: 20px; }
-.message-markdown :deep(code) { padding: 2px 6px; border-radius: 8px; background: rgba(32, 25, 18, 0.08); }
-.message-markdown :deep(blockquote) { margin-left: 0; padding-left: 12px; border-left: 3px solid rgba(32, 25, 18, 0.28); }
-.message-markdown :deep(.mention) { font-weight: 700; color: #a84300; }
-.reaction-chip, .emoji-chip { border: 1px solid var(--kip-border); background: rgba(255, 252, 245, 0.82); border-radius: 999px; padding: 6px 10px; cursor: pointer; }
-.message-row.is-own .reaction-chip { background: rgba(255, 255, 255, 0.14); color: #f9f3ea; }
+.message-markdown :deep(code) { padding: 2px 6px; border-radius: 8px; background: rgba(31, 52, 77, 0.08); }
+.message-markdown :deep(blockquote) { margin-left: 0; padding-left: 12px; border-left: 3px solid rgba(31, 52, 77, 0.22); color: inherit; opacity: 0.9; }
+.message-markdown :deep(.mention) { font-weight: 700; color: #1f6feb; }
+.message-row.is-own .message-markdown :deep(.mention) { color: inherit; text-decoration: underline; }
+.reaction-chip, .emoji-chip { border: 1px solid rgba(111, 128, 150, 0.18); background: rgba(255, 255, 255, 0.88); border-radius: 999px; padding: 6px 10px; cursor: pointer; }
+.message-row.is-own .reaction-chip { background: rgba(255, 255, 255, 0.16); color: #fff; }
 .browser-scroll { max-height: 180px; }
 .browser-name { cursor: pointer; }
 .file-item, .member-item, .browser-item, .unread-marker { padding: 10px 12px; border: 1px solid var(--kip-border); border-radius: 16px; }
