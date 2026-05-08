@@ -309,7 +309,6 @@ const composerEmojis = ['😀', '👍', '🎉', '🤝', '🚀']
 const mentionDraftPattern = /(^|\s)@([A-Za-z0-9._-]{0,64})$/
 const LOCAL_MESSAGE_AUTHOR_FALLBACK = 'You'
 const MIN_RECONNECT_DELAY_MS = 1500
-const RECONNECT_STEP_DELAY_MS = 2000
 const MAX_RECONNECT_DELAY_MS = 15000
 const SESSION_SYNC_INTERVAL_MS = 5000
 
@@ -486,7 +485,7 @@ function disconnectStream({ resetState = false } = {}) {
 function scheduleStreamReconnect() {
   if (reconnectTimer || !token.value) return
   reconnectAttempts += 1
-  const delay = Math.min(MAX_RECONNECT_DELAY_MS, Math.max(MIN_RECONNECT_DELAY_MS, reconnectAttempts * RECONNECT_STEP_DELAY_MS))
+  const delay = Math.min(MAX_RECONNECT_DELAY_MS, MIN_RECONNECT_DELAY_MS * (2 ** (reconnectAttempts - 1)))
   reconnectTimer = window.setTimeout(async () => {
     reconnectTimer = null
     try {
