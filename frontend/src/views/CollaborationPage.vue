@@ -486,7 +486,8 @@ function disconnectStream({ resetState = false } = {}) {
 function scheduleStreamReconnect() {
   if (reconnectTimer || !token.value) return
   reconnectAttempts += 1
-  const delay = RECONNECT_DELAYS_MS[Math.min(reconnectAttempts - 1, RECONNECT_DELAYS_MS.length - 1)]
+  const delayIndex = Math.max(0, Math.min(reconnectAttempts - 1, RECONNECT_DELAYS_MS.length - 1))
+  const delay = RECONNECT_DELAYS_MS[delayIndex]
   reconnectTimer = window.setTimeout(async () => {
     reconnectTimer = null
     try {
@@ -834,7 +835,8 @@ function newLocalMessageId() {
     return `local-message-${crypto.randomUUID()}`
   }
   localMessageCounter += 1
-  return `local-message-${Date.now()}-${localMessageCounter}`
+  const randomSuffix = Math.random().toString(36).slice(2, 8)
+  return `local-message-${Date.now()}-${localMessageCounter}-${randomSuffix}`
 }
 
 function renderBlock(block) {
