@@ -310,6 +310,7 @@ const mentionDraftPattern = /(^|\s)@([A-Za-z0-9._-]{0,64})$/
 const LOCAL_MESSAGE_AUTHOR_FALLBACK = 'You'
 const MIN_RECONNECT_DELAY_MS = 1500
 const MAX_RECONNECT_DELAY_MS = 15000
+const RECONNECT_DELAYS_MS = [MIN_RECONNECT_DELAY_MS, 3000, 6000, 12000, MAX_RECONNECT_DELAY_MS]
 const SESSION_SYNC_INTERVAL_MS = 5000
 
 const route = useRoute()
@@ -485,8 +486,7 @@ function disconnectStream({ resetState = false } = {}) {
 function scheduleStreamReconnect() {
   if (reconnectTimer || !token.value) return
   reconnectAttempts += 1
-  const safeAttempt = Math.min(reconnectAttempts, 8)
-  const delay = Math.min(MAX_RECONNECT_DELAY_MS, MIN_RECONNECT_DELAY_MS * (2 ** (safeAttempt - 1)))
+  const delay = RECONNECT_DELAYS_MS[Math.min(reconnectAttempts - 1, RECONNECT_DELAYS_MS.length - 1)]
   reconnectTimer = window.setTimeout(async () => {
     reconnectTimer = null
     try {
@@ -1007,9 +1007,11 @@ async function downloadAuthorized(url, filename) {
 
 function scrollChatToBottom(smooth = true) {
   const wrap = chatScrollRef.value?.wrapRef
-  if (wrap) {
+  if (wrap && typeof wrap.scrollTo === 'function') {
     wrap.scrollTo({ top: wrap.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+    return
   }
+  if (wrap) wrap.scrollTop = wrap.scrollHeight
 }
 
 async function startVideo() {
