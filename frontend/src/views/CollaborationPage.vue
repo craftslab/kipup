@@ -485,7 +485,8 @@ function disconnectStream({ resetState = false } = {}) {
 function scheduleStreamReconnect() {
   if (reconnectTimer || !token.value) return
   reconnectAttempts += 1
-  const delay = Math.min(MAX_RECONNECT_DELAY_MS, MIN_RECONNECT_DELAY_MS * (2 ** (reconnectAttempts - 1)))
+  const safeAttempt = Math.min(reconnectAttempts, 8)
+  const delay = Math.min(MAX_RECONNECT_DELAY_MS, MIN_RECONNECT_DELAY_MS * (2 ** (safeAttempt - 1)))
   reconnectTimer = window.setTimeout(async () => {
     reconnectTimer = null
     try {
@@ -544,7 +545,6 @@ async function handleRealtimeEvent(event) {
       await router.replace({ name: 'browser' })
       break
     case 'message.created':
-      reconcilePendingMessage(payload)
       messages.value = upsertMessage(payload)
       if (!isOwnAuthor(payload.author)) unreadCount.value += 1
       await nextTick()
@@ -835,19 +835,6 @@ function newLocalMessageId() {
   }
   localMessageCounter += 1
   return `local-message-${Date.now()}-${localMessageCounter}`
-}
-
-function reconcilePendingMessage(message) {
-  if (!isOwnAuthor(message.author) || !pendingMessages.value.length) return
-  const nextIndex = pendingMessages.value.findIndex(
-    (item) =>
-      item.author === message.author &&
-      item.content === message.content &&
-      (item.quickReply || '') === (message.quickReply || '') &&
-      (item.replyTo?.id || '') === (message.replyTo?.id || '')
-  )
-  if (nextIndex < 0) return
-  pendingMessages.value = pendingMessages.value.filter((_, index) => index !== nextIndex)
 }
 
 function renderBlock(block) {
