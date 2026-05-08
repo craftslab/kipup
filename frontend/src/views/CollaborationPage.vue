@@ -307,6 +307,10 @@ const quickReplies = [
 const reactionChoices = ['👍', '🎯', '🔥', '✅']
 const composerEmojis = ['😀', '👍', '🎉', '🤝', '🚀']
 const mentionDraftPattern = /(^|\s)@([A-Za-z0-9._-]{0,64})$/
+const MIN_RECONNECT_DELAY_MS = 1500
+const RECONNECT_STEP_DELAY_MS = 2000
+const MAX_RECONNECT_DELAY_MS = 15000
+const SESSION_SYNC_INTERVAL_MS = 5000
 
 const route = useRoute()
 const router = useRouter()
@@ -481,7 +485,7 @@ function disconnectStream({ resetState = false } = {}) {
 function scheduleStreamReconnect() {
   if (reconnectTimer || !token.value) return
   reconnectAttempts += 1
-  const delay = Math.min(15000, Math.max(1500, reconnectAttempts * 2000))
+  const delay = Math.min(MAX_RECONNECT_DELAY_MS, Math.max(MIN_RECONNECT_DELAY_MS, reconnectAttempts * RECONNECT_STEP_DELAY_MS))
   reconnectTimer = window.setTimeout(async () => {
     reconnectTimer = null
     try {
@@ -503,7 +507,7 @@ function startSessionSyncPolling() {
   sessionSyncTimer = window.setInterval(() => {
     if (streamStatus.value === 'connected' || sessionSyncInFlight || !token.value) return
     void syncSessionState()
-  }, 5000)
+  }, SESSION_SYNC_INTERVAL_MS)
 }
 
 function stopSessionSyncPolling() {
@@ -809,7 +813,7 @@ function renderMessage(message) {
 function createPendingMessage({ content, quickReply, replyTo, type }) {
   const now = new Date().toISOString()
   return {
-    id: `local-message-${Date.now()}-${localMessageCounter++}`,
+    id: newLocalMessageID(),
     type,
     status: 'sent',
     author: currentUsername.value || currentUser.value?.username || 'You',
@@ -823,6 +827,14 @@ function createPendingMessage({ content, quickReply, replyTo, type }) {
     updatedAt: now,
     localState: 'sending'
   }
+}
+
+function newLocalMessageID() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `local-message-${crypto.randomUUID()}`
+  }
+  localMessageCounter += 1
+  return `local-message-${Date.now()}-${localMessageCounter}`
 }
 
 function reconcilePendingMessage(message) {
