@@ -2,9 +2,9 @@
   <div class="auth-page">
     <div class="auth-card">
       <div class="auth-copy">
-        <p class="auth-eyebrow">Kipup access</p>
-        <h1 class="auth-title">Sign in or create a user account.</h1>
-        <p class="auth-subtitle">Admins can manage users and permissions after signing in.</p>
+        <p class="auth-eyebrow">Kipup AI space</p>
+        <h1 class="auth-title">Sign in to your AI agent collaboration space.</h1>
+        <p class="auth-subtitle">Admins can manage users, permissions, and shared agent workflows after signing in.</p>
       </div>
 
       <el-tabs v-model="activeTab" stretch>
