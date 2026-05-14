@@ -1,8 +1,8 @@
-# kipup – Efficient S3 Storage & Download
+# kipup – AI Agent Collaboration Space
 
 [English](README.md) | [中文](README_cn.md)
 
-**kipup** — a variation of “keep up” — is a lightweight **Go + Vue 3** web application for efficient S3 storage, downloads, and interactive collaboration scenarios across text, voice, video, and more.
+**kipup** — a variation of “keep up” — is a lightweight **Go + Vue 3** web application for AI agent collaboration, shared context, and multimodal teamwork across files, text, voice, video, and more.
 
 ## Features
 

@@ -14,14 +14,14 @@
             <el-icon :size="20"><Files /></el-icon>
           </div>
           <div class="brand-copy">
-            <p class="brand-eyebrow">Kipup workspace</p>
-            <h1 class="brand-title">S3 storage, shaped with calmer typography and steadier rhythm.</h1>
-            <p class="brand-subtitle">Quiet S3 management for browsing, collaboration, and sharing.</p>
+            <p class="brand-eyebrow">Kipup AI workspace</p>
+            <h1 class="brand-title">An AI agent collaboration space with calmer typography and steadier rhythm.</h1>
+            <p class="brand-subtitle">Bring agents, files, conversations, and shared context into one focused workspace.</p>
           </div>
         </div>
         <div class="brand-meta">
-          <p>Browse buckets, move files, and share uploads from one quiet control surface.</p>
-          <p>Keep bucket browsing, transfers, and upload sharing organized in one focused workspace.</p>
+            <p>Coordinate AI agents, shared files, and multimodal collaboration from one quiet control surface.</p>
+            <p>Keep shared context, transfers, and coordination organized in one focused workspace.</p>
           <div v-if="currentUser" class="nav-actions">
             <el-button size="small" @click="router.push({ name: 'browser' })">Storage</el-button>
             <el-button v-if="isAdmin" size="small" @click="router.push({ name: 'mobile-apps' })">Mobile Apps</el-button>
